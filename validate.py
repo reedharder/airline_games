@@ -18,6 +18,8 @@ from collections import Counter
 os.chdir("C:/Users/Reed/Desktop/vaze_competition_paper")
 t100 = pd.read_csv("T100_2007.csv")
 p52 = pd.read_csv("P52_2007.csv")
+type1 = pd.read_csv("AIRCRAFT_TYPE_LOOKUP.csv")
+b43 = pd.read_csv("SCHEDULE_B43.csv")
 collapsed_market = pd.read_csv("D1B1_AGGREGATED.csv")
 W_markets = pd.read_csv("W_markets.txt",sep="\t",header=None)
 #get fares of relevant markets
@@ -28,6 +30,7 @@ def create_market(row):
     return "_".join(market)
 W_markets['BI_MARKET'] = W_markets.apply(create_market,1)
 markets = list(set(W_markets['BI_MARKET'].tolist()))
+
 rows = []
 cm = collapsed_market.to_dict('records')
 for row in cm:
@@ -427,3 +430,64 @@ with open('coefsN.txt','w') as outfile:
             line = transcoef1+transcoef2
             line = [str(i) for i in line]
             outfile.write("\t".join(line) + "\n") 
+            
+            
+            
+            
+            
+
+# find number of planes of each type used in each market by each airline
+markets =  rvalid2full['BI_MARKET'].tolist()
+carriers = rvalid2full['UNIQUE_CARRIER'].tolist()
+aotp_jan = pd.read_csv("AOTP_JAN.csv")
+aotp_jan['BI_MARKET']=aotp_jan.apply(create_market,1) 
+aotp_jan_gb = aotp_jan.groupby(['UNIQUE_CARRIER','BI_MARKET'])
+b43ind = b43.set_index('TAIL_NUMBER')
+type1ind = type1.set_index('SHORT_NAME')
+rows = []
+for market, carrier in zip(markets, carriers):
+    row = {}
+    group = aotp_jan_gb.get_group((carrier, market))
+    group = group[pd.notnull(group['TAIL_NUM'])]
+    nflights = group.shape[0]
+    nunique  = group['TAIL_NUM'].nunique()
+    tails = list(set(group['TAIL_NUM'].tolist()))
+    #model for each aircraft number
+    models = b43ind.loc[tails]['MODEL'].tolist()
+    #type number for each model
+    types = type1ind.loc[models]['AC_TYPEID'].value_counts().to_dict()
+    #seats for each model
+    seats_lookup = pd.concat([type1ind.loc[models]['AC_TYPEID'], b43ind.loc[tails]['NUMBER_OF_SEATS']], axis=1).drop_duplicates().set_index('AC_TYPEID')
+   
+    #get count and percentage of each type 
+    seat_sum = sum([count*seats_lookup[ac_type] for ac_type, count in types.items()])
+    type_dict = {ac_type: [count, count/sum(types.values()), count*seats_lookup[ac_type], count*seats_lookup[ac_type]/seat_sum] for ac_type, count in types.items()}
+    #get max type, count and percentage for this market
+    max_perc = 0
+    for ac_type, counts in type_dict.items():
+        if counts[3]>=max_perc:
+            max_perc_freq = counts[1]
+            max_count_freq = counts[0]
+            max_perc_seat = counts[3]
+            max_count_seat = counts[2]
+            max_type = ac_type
+
+    #place into row
+    row['bimarket'] = market
+    row['carrier'] = carrier
+    row['num_flights'] = nflights
+    row['num_craft'] = nunique
+    row['tails'] = tails
+    row['type_dict'] = type_dict
+    row['max_type'] = max_type
+    row['max_perc_freq'] = max_perc_freq
+    row['max_count_freq'] = max_count_freq
+    row['max_perc_seat'] = max_perc_seat
+    row['max_count_seat'] = max_count_seat
+    
+    rows.append(row)
+fleet_dist = pd.DataFrame(rows)            
+    
+        
+
+    
