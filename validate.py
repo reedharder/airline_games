@@ -4,6 +4,8 @@ Created on Sun May 17 23:07:54 2015
 
 @author: Reed
 """
+#WEDS JULY 8th MEETING
+
 
 import os
 import numpy as np
@@ -68,7 +70,7 @@ t101['MARKET'] = t101.apply(create_ordered_market,1)
 #DIVIDE MARKETS BY MONTH
 t102=t101[['BI_MARKET','MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE','SEATS','PASSENGERS','DEPARTURES_SCHEDULED','AIR_TIME']].groupby(['BI_MARKET','MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE']).aggregate({'SEATS':np.sum,'PASSENGERS':np.sum,'DEPARTURES_SCHEDULED':np.sum,'AIR_TIME':np.sum}).reset_index()
 t102['FREQ']=t102['DEPARTURES_SCHEDULED']/(365/4)
-t102 = t102[t102['FREQ']>=1]
+##t102 = t102[t102['FREQ']>=1]
 ##t102 = t102[t102['FREQ']<=20] #SET TO QX TO 20
 
 merge_cost = pd.merge(t102,by_type_records,on=['AIRCRAFT_TYPE','UNIQUE_CARRIER'])
@@ -434,7 +436,9 @@ with open('coefsN.txt','w') as outfile:
             
             
             
-            
+'''
+old fleet allocation script
+'''
 
 # find number of planes of each type used in each market by each airline
 markets =  rvalid2full['BI_MARKET'].tolist()
@@ -490,4 +494,85 @@ fleet_dist = pd.DataFrame(rows)
     
         
 
+'''
+end old fleet allocation script
+'''
+
+
+
+#get most common aircraft type on segment for each carrier
+# find number of planes of each type used in each market by each airline
+markets =  rvalid2full['BI_MARKET'].tolist()
+carriers = rvalid2full['UNIQUE_CARRIER'].tolist()
+##aotp_jan = pd.read_csv("AOTP_JAN.csv")
+##aotp_jan['BI_MARKET']=aotp_jan.apply(create_market,1)
+t100_jan= t100[t100['MONTH']==1] 
+t100_jan['BI_MARKET']=t100_jan.apply(create_market,1)
+t100_gb = t100_jan.groupby(['UNIQUE_CARRIER','BI_MARKET'])
+cost_lookup = merge_cost.groupby(['BI_MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE'])
+b43ind = b43.set_index('TAIL_NUMBER')
+type1ind = type1.set_index('SHORT_NAME')
+rows = []
+       
+def find_seats(row):
+    model=type1[type1['AC_TYPEID']==row['AIRCRAFT_TYPE']]['SHORT_NAME'].iloc[0]
     
+    try:
+        seats =b43[b43['MODEL']==model]['NUMBER_OF_SEATS'].iloc[0]
+    except IndexError:
+        print(model)
+        seats =b43[b43['MODEL']==model[:-2]]['NUMBER_OF_SEATS'].iloc[0]
+    return seats
+    
+def find_cost(row):
+    try:
+        costgroup = cost_lookup.get_group((row['BI_MARKET'], row['UNIQUE_CARRIER'],row['AIRCRAFT_TYPE']))
+        #print(costgroup)
+        costs = costgroup['COSTS'].mean()
+    except KeyError:
+        costs = np.nan
+   # print(costs)
+    return costs
+            
+i=0
+for market, carrier in zip(markets, carriers):
+    i+=1
+    row = {}
+    group = t100_gb.get_group((carrier, market))  
+    group =group[['BI_MARKET','UNIQUE_CARRIER','PASSENGERS','AIR_TIME','SEATS','AIRCRAFT_TYPE']].groupby(['BI_MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE']).aggregate({'PASSENGERS':np.mean,'SEATS':np.mean,'AIR_TIME':np.sum}).reset_index()
+    num_types = group.shape[0]    
+    #total passengers across types
+    totpax = group['PASSENGERS'].sum()
+    
+    group_sort = group.sort(columns=['PASSENGERS'], axis=0,ascending=False)
+   
+    group_sort['PPAX']=group_sort['PASSENGERS']/totpax
+    max_perc = group_sort['PPAX'].iloc[0]
+    max_seats = group_sort['SEATS'].iloc[0]
+    max_pax = group_sort['PASSENGERS'].iloc[0]
+    max_type=group_sort['AIRCRAFT_TYPE'].iloc[0]
+    max_time=group_sort['AIR_TIME'].iloc[0]
+    
+    group_sort['CRAFT_SEATS'] = group_sort.apply(find_seats, axis=1)
+    print(i, 'seats')
+    group_sort['CRAFT_COST'] = group_sort.apply(find_cost, axis=1)
+    print(i, 'costs')
+    ##group_sort = group_sort[pd.notnull(group_sort['CRAFT_COST'])]
+    type_dict = {gs['AIRCRAFT_TYPE']:[gs['CRAFT_SEATS'],gs['CRAFT_COST'], gs['PASSENGERS'],gs['PPAX'],gs['AIR_TIME'],gs['SEATS']] for gs in group_sort.to_dict('records')}
+    
+    
+   
+    #place into row
+    row['bimarket'] = market
+    row['carrier'] = carrier   
+    
+    row['max_type'] = max_type
+    row['max_time'] = max_time
+    row['max_perc'] = max_perc
+    row['max_pax'] = max_pax
+    row['max_seats'] = max_seats
+    row['type_dict'] = type_dict
+    
+    rows.append(row)
+fleet_dist = pd.DataFrame(rows)    
+fleet_dist.to_csv("fleetdist.csv", sep='\t')
