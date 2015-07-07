@@ -17,7 +17,7 @@ from itertools import product
 
 os.chdir("C:/Users/Reed/Desktop/vaze_competition_paper")
 
-
+#OHNO SHEEEIT
 carriers = ['SEA','PDX','SFO','SAN','LAX','LAS','PHX','OAK','ONT','SMF','SJC']
 pairs =[sorted([pair[0],pair[1]]) for pair in product(carriers,carriers) if pair[0]!=pair[1] ]
 txtpairs = list(set(["_".join(pair) for pair in pairs]))
