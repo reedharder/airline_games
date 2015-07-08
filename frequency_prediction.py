@@ -20,10 +20,12 @@ p52_fn is form P.52 file from BTS
 ac_type_fn is aircraft type file from BTS
 b43_fn is Schedule B4 file from BTS
 airports is a list of airports in the network
+freq_cuttoff is minimum daily frequency to consider
+ms_cuttoff is cumulative market share to consider in each market
 '''
 def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",directory="C:/Users/Reed/Desktop/vaze_competition_paper", quarters=[1,2,3,4], \
     t100_fn="T100_2007.csv",p52_fn="P52_2007.csv", ac_type_fn ="AIRCRAFT_TYPE_LOOKUP.csv",b43_fn = "SCHEDULE_B43.csv", \
-    airports = ['SEA','PDX','SFO','SAN','LAX','LAS','PHX','OAK','ONT','SMF','SJC']):
+    freq_cuttoff = .5, ms_cuttoff=.9, airports = ['SEA','PDX','SFO','SAN','LAX','LAS','PHX','OAK','ONT','SMF','SJC']):
         
     #read in revelant bts files and supplementary data files 
     os.chdir("C:/Users/Reed/Desktop/vaze_competition_paper")
@@ -66,12 +68,32 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",direc
     #merge t100 data with cost data
     t100_summed=pd.merge(t100_summed,expenses_by_type,on=['AIRCRAFT_TYPE','UNIQUE_CARRIER'])
     t100_summed['FLIGHT_COST'] = t100_summed['AIR_HOURS']*t100_summed['EXP_PER_HOUR']/t100_summed['DEPARTURES_SCHEDULED'] #get cost per flight type
+    t100_summed.to_csv('t100_summed.csv') #SEE DISTRIBUTION WITHIN MARKETS, IS AVERAGING REASONABLE -> weight by passengers: before averaging markets: plane types back and forth might not be same , passengers more likely to correlate, but now we can test
+    t100_summed = t100_summed[t100_summed['PASSENGERS']>0]
+    t100_summed = t100_summed[t100_summed['DEPARTURES_SCHEDULED']>0]    
+    #average flight cost between different types  [WEIGHTED BY DAILY FREQ -> CIRCULAR REASOINING HERE?]
+    t100fields =['BI_MARKET','ORIGIN','DEST','UNIQUE_CARRIER','AIRCRAFT_TYPE','DEPARTURES_SCHEDULED','SEATS','PASSENGERS','DISTANCE', 'DAILY_FREQ','FLIGHT_COST','FLIGHT_TIME']
+    t100_summed_avgs = t100_summed[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET']).apply(avg_costs)
+    t100_craft_avg = t100_summed_avgs[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET','ORIGIN','DEST']).aggregate({'DEPARTURES_SCHEDULED':np.sum,'SEATS':np.sum,'PASSENGERS':np.sum,'DISTANCE':np.mean, 'DAILY_FREQ':np.sum,'FLIGHT_COST':np.mean,'FLIGHT_TIME':np.mean}).reset_index()
+    #textfile to check passenger equivalence between market directions
+    t100_craft_avg.to_csv("t100_craft_avg.csv")
     #average values between segments sharing a bidirectional market 
-    t100fields =['BI_MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE','DEPARTURES_SCHEDULED','SEATS','PASSENGERS','DISTANCE', 'DAILY_FREQ','FLIGHT_COST','FLIGHT_TIME']
-    t100_avgd = t100_summed[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET','AIRCRAFT_TYPE']).aggregate({'DEPARTURES_SCHEDULED':np.mean,'DAILY_FREQ':np.mean,'SEATS':np.mean,'PASSENGERS':np.mean,'DISTANCE':np.mean,'FLIGHT_COST': np.mean,'FLIGHT_TIME':np.mean}).reset_index()
+    t100fields =['BI_MARKET','UNIQUE_CARRIER','DEPARTURES_SCHEDULED','SEATS','PASSENGERS','DISTANCE', 'DAILY_FREQ','FLIGHT_COST','FLIGHT_TIME']
+    t100_avgd = t100_craft_avg[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET']).aggregate({'DEPARTURES_SCHEDULED':np.mean,'DAILY_FREQ':np.mean,'SEATS':np.mean,'PASSENGERS':np.mean,'DISTANCE':np.mean,'FLIGHT_COST': np.mean,'FLIGHT_TIME':np.mean}).reset_index()
     #save data frame to csv: costs and frequencies by market, carrier, aircraft type
-    t100_avgd.to_csv("t100_avgd.csv",sep="\t")   
-    
+    t100_avgd.to_csv("t100_avgd.csv",sep="\t")  
+    t100_avgd_clip = t100_avgd[t100_avgd['DAILY_FREQ']>=freq_cuttoff]
+    #group and rank carriers within markets
+    t100_grouped = t100_avgd_clip.groupby('BI_MARKET')
+    grouplist = []
+    for market in list(set(t100_avgd_clip['BI_MARKET'].tolist())):
+        market_group = t100_grouped.get_group(market)
+        new_group = market_rank(market_group)
+        grouplist.append(new_group)
+    t100ranked = pd.concat(grouplist,axis=0)
+    ##t100_avgd_clip = t100_avgd_clip.groupby('BI_MARKET').apply(market_rank)
+    t100ranked.to_csv('mranked.csv')
+
     '''
     function to create a bidirectional market indicator (with airports sorted by text) for origin-destination pairs
     '''    
@@ -80,120 +102,44 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",direc
         market.sort()
         return "_".join(market)
     '''
-    function to average across aircraft types and rank carriers by passenger flow (or frequency? or by both, optionally in market ACTUALLY JUST BOTH, but important is passengers presumable, to rule out UPS, etc. 
+    get a weighed average costs and flight times across a directional market
+    '''
+    def avg_costs(gb):
+        cost_weighted = np.average(gb['FLIGHT_COST'], weights=gb['DAILY_FREQ'])
+        gb['FLIGHT_COST'] = np.repeat(cost_weighted,gb.shape[0])
+        time_weighted = np.average(gb['FLIGHT_TIME'], weights=gb['DAILY_FREQ'])
+        gb['FLIGHT_TIME'] = np.repeat(time_weighted,gb.shape[0])
+                
+        return gb
+    '''
+    function to average across aircraft types and rank carriers by passenger flow 
     via pandas groupby function, recieves sub-dataframes, each one comprising a market
     '''      
     def market_rank(gb):
-        
-    def group_rank(gb):
-        gb =gb[['MARKET','BI_MARKET','UNIQUE_CARRIER','PASSENGERS','FREQ','FARE','COSTS']].groupby(['MARKET','BI_MARKET','UNIQUE_CARRIER']).aggregate({'PASSENGERS':np.sum,'FREQ':np.sum,'FARE':np.mean, 'COSTS':np.mean}).reset_index()
-        #average stats across ORDERED MARKETS OF SAME BYMARKE    
-        gb=gb.groupby(['BI_MARKET','UNIQUE_CARRIER']).aggregate({'PASSENGERS':np.mean,'FREQ':np.mean,'FARE':np.mean, 'COSTS':np.mean})
         Mtot = gb['PASSENGERS'].sum()
         gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
         Mcount =gb.shape[0]
         gb['MARKET_COMPETITORS'] = np.repeat(Mcount,gb.shape[0] )
-        rank = gb['PASSENGERS'].argsort().argsort() +1 
-        gb['MARKET_RANK'] = rank 
-        gb = gb.sort(columns=['MARKET_RANK'],ascending=False,axis =0)
+        rank = np.array(gb['PASSENGERS'].tolist()).argsort()[::-1].argsort() +1 
+        gb['MARKET_RANK'] = rank         
+        gb = gb.sort(columns=['MARKET_RANK'],ascending=True,axis =0)        
         gb['MS_TOT']=gb['PASSENGERS']/gb['MARKET_TOT']
-        M2 = gb[:2]['PASSENGERS'].sum()
-        gb['MARKET_2'] = np.repeat(M2,gb.shape[0] )
-        gb['MS_2']=gb['PASSENGERS']/gb['MARKET_2']
-        gb['TOP2_MS']=M2/Mtot
-    
-    return gb
-
-
-#get t100 records of relevat western markets
-def create_market(row):
-    market = [row['ORIGIN'], row['DEST']]
-    market.sort()
-    return "_".join(market)
-t100['BI_MARKET']=t100.apply(create_market,1) 
-t101 = t100.set_index('BI_MARKET')
-t101 = t101.loc[markets]
-t101 =t101.reset_index()
-t101 = t101[t101['QUARTER']==1]
-
-# get cost per hour per airline/aircraft combo
-p52 = p52[p52['QUARTER']==1]
-p52 = p52[p52['REGION']=='D']
-p52['EXP_PER_HOUR'] = p52['TOT_AIR_OP_EXPENSES'] / p52['TOTAL_AIR_HOURS']
-#POTENTIALLY A GOOD OPTION, CHECK WITH VIKRANT. COSTS PER FLIGHT ARE STILL HIGH THOUGH
-##p=p52[p52['TOTAL_AIR_HOURS']>20]
-p=p52
-by_type=p[['AIRCRAFT_TYPE','UNIQUE_CARRIER','EXP_PER_HOUR']].groupby(['AIRCRAFT_TYPE','UNIQUE_CARRIER']).aggregate(np.mean)
-by_type_records = by_type.reset_index().dropna()
-
-def create_ordered_market(row):
-    market = [row['ORIGIN'], row['DEST']]
-    return "_".join(market)
-t101['MARKET'] = t101.apply(create_ordered_market,1)
-#DIVIDE MARKETS BY MONTH
-t102=t101[['BI_MARKET','MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE','SEATS','PASSENGERS','DEPARTURES_SCHEDULED','AIR_TIME']].groupby(['BI_MARKET','MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE']).aggregate({'SEATS':np.sum,'PASSENGERS':np.sum,'DEPARTURES_SCHEDULED':np.sum,'AIR_TIME':np.sum}).reset_index()
-t102['FREQ']=t102['DEPARTURES_SCHEDULED']/(365/4)
-##t102 = t102[t102['FREQ']>=1]
-##t102 = t102[t102['FREQ']<=20] #SET TO QX TO 20
-
-merge_cost = pd.merge(t102,by_type_records,on=['AIRCRAFT_TYPE','UNIQUE_CARRIER'])
-#total expenses across all hours over departures = cost per departure
-merge_cost['COSTS'] = merge_cost['AIR_TIME']*merge_cost['EXP_PER_HOUR']*(1/60)/merge_cost['DEPARTURES_SCHEDULED']
-merge_full = pd.merge(merge_cost,fares,on=['BI_MARKET','UNIQUE_CARRIER'])
-merge_full['PROFIT']=merge_full['PASSENGERS']*merge_full['FARE'] - merge_full['FREQ']*merge_full['COSTS']
-#MERGE BI_MARKETS?
-#FOR MARKET , DO NON STOP FIRST, THEN GET ALL
-#HOW TO DEAL WITH DIFFERENT TYPES OF MARKETS
-
-#
-
-
-#CHECK RANK ORDER FOR 2SLS
-#MARKET SHARE TO PROFITS BOTH WAYS? WHICH MARKET SIZE? DEPENDS ON N PRESUMABLY
-
-#CHECK COSTS
-#DO THREE WAY AS WELL
-#DOUBLE CHECK ALL UNITS, MAKE SURE AGGREGATE WORKS
-
-#for each artpicular N solve for  Market size
-
-#
-#tomorrow, run 2 player nd 3 player games
-#modify N check, 
-#order computer 
-#run analysis for routes and markets
-#begin to observe network
-#2sls
-def group_rank(gb):
-    gb =gb[['MARKET','BI_MARKET','UNIQUE_CARRIER','PASSENGERS','FREQ','FARE','COSTS']].groupby(['MARKET','BI_MARKET','UNIQUE_CARRIER']).aggregate({'PASSENGERS':np.sum,'FREQ':np.sum,'FARE':np.mean, 'COSTS':np.mean}).reset_index()
-    #average stats across ORDERED MARKETS OF SAME BYMARKE    
-    gb=gb.groupby(['BI_MARKET','UNIQUE_CARRIER']).aggregate({'PASSENGERS':np.mean,'FREQ':np.mean,'FARE':np.mean, 'COSTS':np.mean})
-    Mtot = gb['PASSENGERS'].sum()
-    gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
-    Mcount =gb.shape[0]
-    gb['MARKET_COMPETITORS'] = np.repeat(Mcount,gb.shape[0] )
-    rank = gb['PASSENGERS'].argsort().argsort() +1 
-    gb['MARKET_RANK'] = rank 
-    gb = gb.sort(columns=['MARKET_RANK'],ascending=False,axis =0)
-    gb['MS_TOT']=gb['PASSENGERS']/gb['MARKET_TOT']
-    M2 = gb[:2]['PASSENGERS'].sum()
-    gb['MARKET_2'] = np.repeat(M2,gb.shape[0] )
-    gb['MS_2']=gb['PASSENGERS']/gb['MARKET_2']
-    gb['TOP2_MS']=M2/Mtot
-    
-    return gb
-
+        #cumulative market share upto and including that ranking
+        gb['CUM_MS']=gb.apply(lambda x: gb['MS_TOT'][:x['MARKET_RANK']].sum(), axis=1)
+        #cumulative market share upto that ranking
+        gb['PREV_CUM_MS']=gb.apply(lambda x: gb['MS_TOT'][:x['MARKET_RANK']-1].sum(), axis=1)
+        #remove those carriers that appear after cuttoff
+        gb=gb[gb['PREV_CUM_MS']<=ms_cuttoff]
+        #recalculate market shares
+        Mtot = gb['PASSENGERS'].sum()
+        gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
+        Mcount =gb.shape[0]
+        gb['MARKET_COMPETITORS'] = np.repeat(Mcount,gb.shape[0] )
+        gb['MS_TOT']=gb['PASSENGERS']/gb['MARKET_TOT']
+        return gb
+        
+       
 #compare individual vs bi markets
-markettype='BI_MARKET'
-merge_market = merge_full.groupby(markettype).apply(group_rank)
-merge_market.index = merge_market.index.droplevel(0)
-
-m=merge_market.reset_index()
-m.to_csv("validation_df.csv", sep='\t')
-#remove non competitive markets
-m = m[m['MARKET_COMPETITORS']>1]
-##m = m[m['MARKET_COMPETITORS']==2]
-#remove below certain 2 market dominance
 import math
 #NEED TO AGGREGATE BETWEEN AIRCRAFT TYPES
 def group_reg_form_2(gb):
