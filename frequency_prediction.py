@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 from itertools import product
+from math import ceil
 
 '''
 function creates file consisting of nonstop market/carrier combinations for relevant markets and carriers, including empirical costs, frequencies and prices
@@ -95,53 +96,59 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",direc
     ##t100_avgd_clip = t100_avgd_clip.groupby('BI_MARKET').apply(market_rank)
     t100ranked.to_csv(output_file)
 
-    '''
-    function to create a bidirectional market indicator (with airports sorted by text) for origin-destination pairs
-    '''    
-    def create_market(row):
-        market = [row['ORIGIN'], row['DEST']]
-        market.sort()
-        return "_".join(market)
-    '''
-    get a weighed average costs and flight times across a directional market
-    '''
-    def avg_costs(gb):
-        cost_weighted = np.average(gb['FLIGHT_COST'], weights=gb['DAILY_FREQ'])
-        gb['FLIGHT_COST'] = np.repeat(cost_weighted,gb.shape[0])
-        time_weighted = np.average(gb['FLIGHT_TIME'], weights=gb['DAILY_FREQ'])
-        gb['FLIGHT_TIME'] = np.repeat(time_weighted,gb.shape[0])
-                
-        return gb
-    '''
-    function to average across aircraft types and rank carriers by passenger flow 
-    via pandas groupby function, recieves sub-dataframes, each one comprising a market
-    '''      
-    def market_rank(gb):
-        Mtot = gb['PASSENGERS'].sum()
-        gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
-        Mcount =gb.shape[0]
-        gb['MARKET_COMPETITORS'] = np.repeat(Mcount,gb.shape[0] )
-        rank = np.array(gb['PASSENGERS'].tolist()).argsort()[::-1].argsort() +1 
-        gb['MARKET_RANK'] = rank         
-        gb = gb.sort(columns=['MARKET_RANK'],ascending=True,axis =0)        
-        gb['MS_TOT']=gb['PASSENGERS']/gb['MARKET_TOT']
-        #cumulative market share upto and including that ranking
-        gb['CUM_MS']=gb.apply(lambda x: gb['MS_TOT'][:x['MARKET_RANK']].sum(), axis=1)
-        #cumulative market share upto that ranking
-        gb['PREV_CUM_MS']=gb.apply(lambda x: gb['MS_TOT'][:x['MARKET_RANK']-1].sum(), axis=1)
-        #remove those carriers that appear after cuttoff
-        gb=gb[gb['PREV_CUM_MS']<=ms_cuttoff]
-        #recalculate market shares
-        Mtot = gb['PASSENGERS'].sum()
-        gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
-        Mcount =gb.shape[0]
-        gb['MARKET_COMPETITORS'] = np.repeat(Mcount,gb.shape[0] )
-        gb['MS_TOT']=gb['PASSENGERS']/gb['MARKET_TOT']
-        return gb
+ 
     
     return output_file
+'''
+function to create a bidirectional market indicator (with airports sorted by text) for origin-destination pairs
+'''    
+def create_market(row):
+    market = [row['ORIGIN'], row['DEST']]
+    market.sort()
+    return "_".join(market)
+'''
+get a weighed average costs and flight times across a directional market
+'''
+def avg_costs(gb):
+    cost_weighted = np.average(gb['FLIGHT_COST'], weights=gb['DAILY_FREQ'])
+    gb['FLIGHT_COST'] = np.repeat(cost_weighted,gb.shape[0])
+    time_weighted = np.average(gb['FLIGHT_TIME'], weights=gb['DAILY_FREQ'])
+    gb['FLIGHT_TIME'] = np.repeat(time_weighted,gb.shape[0])
+            
+    return gb
+'''
+function to average across aircraft types and rank carriers by passenger flow 
+via pandas groupby function, recieves sub-dataframes, each one comprising a market
+'''      
+def market_rank(gb):
+    Mtot = gb['PASSENGERS'].sum()
+    gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
+    Mcount =gb.shape[0]
+    gb['MARKET_COMPETITORS'] = np.repeat(Mcount,gb.shape[0] )
+    rank = np.array(gb['PASSENGERS'].tolist()).argsort()[::-1].argsort() +1 
+    gb['MARKET_RANK'] = rank         
+    gb = gb.sort(columns=['MARKET_RANK'],ascending=True,axis =0)        
+    gb['MS_TOT']=gb['PASSENGERS']/gb['MARKET_TOT']
+    #cumulative market share upto and including that ranking
+    gb['CUM_MS']=gb.apply(lambda x: gb['MS_TOT'][:x['MARKET_RANK']].sum(), axis=1)
+    #cumulative market share upto that ranking
+    gb['PREV_CUM_MS']=gb.apply(lambda x: gb['MS_TOT'][:x['MARKET_RANK']-1].sum(), axis=1)
+    #remove those carriers that appear after cuttoff
+    gb=gb[gb['PREV_CUM_MS']<=ms_cuttoff]
+    #recalculate market shares
+    Mtot = gb['PASSENGERS'].sum()
+    gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
+    Mcount =gb.shape[0]
+    gb['MARKET_COMPETITORS'] = np.repeat(Mcount,gb.shape[0] )
+    gb['MS_TOT']=gb['PASSENGERS']/gb['MARKET_TOT']
+    return gb    
+    
+    
     
 #COEFFICIENT CALCULATION FOR 2, 3 4, and 1
+    #use .1 cuttoff to remove 6
+    
+#COMPARATIVE STATICS, in context of game theory, COMPARATIVE DYNMACS
   
 '''
 function to find most common type of plane used on each segment
@@ -179,15 +186,9 @@ def fleet_assign(market_table_fn= "nonstop_competitive_markets.csv",ac_type_fn =
         max_pax = group_sort['PASSENGERS'].iloc[0]
         max_type=group_sort['AIRCRAFT_TYPE'].iloc[0]
         
-        '''
-        max_perc = group_sort['PPAX'].iloc[0]
-        max_seats = group_sort['SEATS'].iloc[0]
-        max_pax = group_sort['PASSENGERS'].iloc[0]
-        max_type=group_sort['AIRCRAFT_TYPE'].iloc[0]
-        max_time=group_sort['AIR_TIME'].iloc[0]
-        '''        
+       
         group_sort['CRAFT_SEATS'] = group_sort.apply(find_seats, axis=1)       
-        ##group_sort = group_sort[pd.notnull(group_sort['CRAFT_COST'])]
+        
         type_dict = {gs['AIRCRAFT_TYPE']:[gs['CRAFT_SEATS'],gs['FLIGHT_COST'], gs['DAILY_FREQ'],gs['PFREQ'],gs['FLIGHT_TIME'],gs['SEATS']] for gs in group_sort.to_dict('records')}
        #place into row
         row['bimarket'] = market
@@ -205,49 +206,85 @@ def fleet_assign(market_table_fn= "nonstop_competitive_markets.csv",ac_type_fn =
     fleet_dist = pd.DataFrame(rows)    
     fleet_dist.to_csv("fleetdist1.csv", sep='\t')
     
-    
+    #ADDITIONAL CODE TO FIND NUMBER OF ASSIGNED SEATS FOR ASSIGNED AIRCRAFT IN FLEET DISTRIBUTION TABLE
+    '''
     by_carrier=fleet_dist[['carrier','type_list']].groupby('carrier').aggregate(lambda x: x.iloc[0]).reset_index()
     seat_lookup = {}
     for row in by_carrier.to_dict('records'):        
         seat_lookup[row['carrier']] = {rec[0]:rec[1] for rec in row['type_list']}
     aug_fleet = pd.read_csv('fleet_dist_aug.csv')  
-    aug_fleet['assigned_seats'] = aug_fleet.apply(assigned_seats, axis=1)
     def assigned_seats(row):
         carr = row['carrier']
         plane_list=str(row['assigned_type']).split('-')
         seatlist  = [seat_lookup[carr][int(plane)] for plane in plane_list]
         return round(np.mean(seatlist))
+    aug_fleet['assigned_seats'] = aug_fleet.apply(assigned_seats, axis=1)
+    '''
     #carrier distribution
     
-    #MAKE SURE MARKETS ARE CONSISTENT
+    #MAKE SURE MARKET/BIMARKET times and Frequencies are consistent
         
     
     '''
-    function to create a bidirectional market indicator (with airports sorted by text) for origin-destination pairs
-    '''    
-    def create_market(row):
-        market = [row['ORIGIN'], row['DEST']]
-        market.sort()
-        return "_".join(market)
+function to create a bidirectional market indicator (with airports sorted by text) for origin-destination pairs
+'''    
+def create_market(row):
+    market = [row['ORIGIN'], row['DEST']]
+    market.sort()
+    return "_".join(market)
 
-       
-    def find_seats(row):
-        model=type1[type1['AC_TYPEID']==row['AIRCRAFT_TYPE']]['SHORT_NAME'].iloc[0]
-        
+   
+def find_seats(row):
+    model=type1[type1['AC_TYPEID']==row['AIRCRAFT_TYPE']]['SHORT_NAME'].iloc[0]
+    
+    try:
+        seats =b43[b43['MODEL']==model]['NUMBER_OF_SEATS'].iloc[0]
+    except IndexError:
+        print(model)
         try:
-            seats =b43[b43['MODEL']==model]['NUMBER_OF_SEATS'].iloc[0]
+            seats =b43[b43['MODEL']==model[:-2]]['NUMBER_OF_SEATS'].iloc[0]
         except IndexError:
             print(model)
-            try:
-                seats =b43[b43['MODEL']==model[:-2]]['NUMBER_OF_SEATS'].iloc[0]
-            except IndexError:
-                print(model)
-                seats =b43[b43['MODEL']==(model[:-2] + '/A')]['NUMBER_OF_SEATS'].iloc[0]
-        return seats
-        
-    return fleet_dist
-        
+            seats =b43[b43['MODEL']==(model[:-2] + '/A')]['NUMBER_OF_SEATS'].iloc[0]
+    return seats
+    
+return fleet_dist
 
+#estimate size of an aircraft's fleet of a certain type from the total airtime of that fleet type
+#PASS quarters VARIABLE
+def fleet_size_by_airtime(df):
+    hours_pday = df['AIR_HOURS']/(365/(4/len(quarters))) + (45/60)*df['DAILY_FREQ'] #add in average turn around time
+    total_time = hours_pday.sum()
+    #return estimated number of aircraft assuming airlines use as mcuh of fleet as possible (a questionable assumption?)
+    return total_time/18
+
+#PASS seat_lookup VARIABLE
+def construct_Ftable():
+    aug_fleet = pd.read_csv('fleet_dist_aug.csv')  
+    t100_summed = pd.read_csv('t100_summed.csv')
+    t100_gb_carr_ac = t100_summed.grouby(['UNIQUE_CARRIER','AIRCRAFT_TYPE'])
+    airlines = list(set(aug_fleet['carrier'].tolist()))
+    for airline in airlines:
+        ac_types= seat_lookup[airline].keys()
+        for ac_type in ac_types:
+            a
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
 t100_jan= t100[t100['MONTH']==1] 
 t100_jan['BI_MARKET']=t100_jan.apply(create_market,1)
 t100_gb = t100_jan.groupby(['UNIQUE_CARRIER','BI_MARKET'])
@@ -394,6 +431,9 @@ def group_reduced_3CARRIER(gb):
     gb['c3'] = np.repeat(gb.iloc[2]['COSTS'],3) 
   
     return gb
+    
+    
+
 
 mreg3 = m3.groupby(markettype).apply(group_reduced_3CARRIER)
 mreg3 = mreg3.drop('BI_MARKET',1).reset_index()
