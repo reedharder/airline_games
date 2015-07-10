@@ -252,24 +252,32 @@ return fleet_dist
 
 #estimate size of an aircraft's fleet of a certain type from the total airtime of that fleet type
 #PASS quarters VARIABLE
+
 def fleet_size_by_airtime(df):
     hours_pday = df['AIR_HOURS']/(365/(4/len(quarters))) + (45/60)*df['DAILY_FREQ'] #add in average turn around time
     total_time = hours_pday.sum()
     #return estimated number of aircraft assuming airlines use as mcuh of fleet as possible (a questionable assumption?)
-    return total_time/18
+    return (total_time/18)
 
 #PASS seat_lookup VARIABLE
 def construct_Ftable():
     aug_fleet = pd.read_csv('fleet_dist_aug.csv')  
     t100_summed = pd.read_csv('t100_summed.csv')
-    t100_gb_carr_ac = t100_summed.grouby(['UNIQUE_CARRIER','AIRCRAFT_TYPE'])
+    t100_gb = t100_summed.groupby(['UNIQUE_CARRIER','AIRCRAFT_TYPE'])
     airlines = list(set(aug_fleet['carrier'].tolist()))
+    rows=[]
     for airline in airlines:
         ac_types= seat_lookup[airline].keys()
         for ac_type in ac_types:
-            a
-
-
+            row={}
+            select=(airline, ac_type)
+            fleet=t100_gb.get_group(select)
+            row['carrier'] = airline
+            row['aircraft_type']=ac_type
+            row['fleet_count'] = fleet_size_by_airtime(fleet)
+            rows.append(row)
+    fleet_lookup =pd.DataFrame(rows)      
+    return fleet_lookup
 
 
 
@@ -471,7 +479,69 @@ with open('coefsN2.txt','w') as outfile:
             #transcoef2 = [-(Mnew/Mold)*coef[0], -(Mnew/Mold)*coef[2],(Mnew/Mold)*(C2old-coef[1])-C2new] + [-(Mnew/Mold)*coef[i] for i in range(3,6)]
             line = transcoef1+transcoef2
             line = [str(i) for i in line]
+            outfile.write("\t".join(line) + "\n")       
+            
+
+
+#for 3 player
+coef3=[-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+with open('coefsN2.txt','w') as outfile:
+    for i,row in enumerate(mreg2.to_dict('records')):
+        Mold = 1000
+        C1old =10000
+        C2old = 10000
+        C1new = float(row['c1'])
+        C2new = float(row['c2'])
+        Mnew = int(row['MARKET_2'])
+        if i%2==0:
+            transcoef1 = [-(Mnew/Mold)*coef[0],(Mnew/Mold)*(C1old-coef[1])-C1new] + [-(Mnew/Mold)*coef[i] for i in range(2,6)]
+            transcoef2 = [-(Mnew/Mold)*coef[0],(Mnew/Mold)*(C2old-coef[1])-C2new] + [-(Mnew/Mold)*coef[i] for i in range(2,6)]
+            #transcoef2 = [-(Mnew/Mold)*coef[0], -(Mnew/Mold)*coef[2],(Mnew/Mold)*(C2old-coef[1])-C2new] + [-(Mnew/Mold)*coef[i] for i in range(3,6)]
+            line = transcoef1+transcoef2
+            line = [str(i) for i in line]
             outfile.write("\t".join(line) + "\n")          
+
+
+
+#	for 1 player
+coef1=[-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+with open('coefsN1.txt','w') as outfile:
+    for i,row in enumerate(mreg2.to_dict('records')):
+        Mold = 1000
+        C1old =10000
+        C2old = 10000
+        C1new = float(row['c1'])
+        C2new = float(row['c2'])
+        Mnew = int(row['MARKET_2'])
+        if i%2==0:
+            transcoef1 = [-(Mnew/Mold)*coef[0],(Mnew/Mold)*(C1old-coef[1])-C1new] + [-(Mnew/Mold)*coef[i] for i in range(2,6)]
+            transcoef2 = [-(Mnew/Mold)*coef[0],(Mnew/Mold)*(C2old-coef[1])-C2new] + [-(Mnew/Mold)*coef[i] for i in range(2,6)]
+            #transcoef2 = [-(Mnew/Mold)*coef[0], -(Mnew/Mold)*coef[2],(Mnew/Mold)*(C2old-coef[1])-C2new] + [-(Mnew/Mold)*coef[i] for i in range(3,6)]
+            line = transcoef1+transcoef2
+            line = [str(i) for i in line]
+            outfile.write("\t".join(line) + "\n")          
+            
+            
+#for 4 player
+coef4=[-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7] #15 coefficients
+with open('coefsN4.txt','w') as outfile:
+    for i,row in enumerate(mreg2.to_dict('records')):
+        Mold = 1000
+        C1old =10000
+        C2old = 10000
+        C1new = float(row['c1'])
+        C2new = float(row['c2'])
+        Mnew = int(row['MARKET_2'])
+        if i%2==0:
+            transcoef1 = [-(Mnew/Mold)*coef[0],(Mnew/Mold)*(C1old-coef[1])-C1new] + [-(Mnew/Mold)*coef[i] for i in range(2,6)]
+            transcoef2 = [-(Mnew/Mold)*coef[0],(Mnew/Mold)*(C2old-coef[1])-C2new] + [-(Mnew/Mold)*coef[i] for i in range(2,6)]
+            #transcoef2 = [-(Mnew/Mold)*coef[0], -(Mnew/Mold)*coef[2],(Mnew/Mold)*(C2old-coef[1])-C2new] + [-(Mnew/Mold)*coef[i] for i in range(3,6)]
+            line = transcoef1+transcoef2
+            line = [str(i) for i in line]
+            outfile.write("\t".join(line) + "\n")        
+            
+            
+            
             
             
 passen = 0        
