@@ -31,7 +31,7 @@ for f1=1:20
                     c=c+1;
                 end
                 count=count+1;
-                ps(count,:)=[alpha,beta,f1,f2,f3,f4,p(i),p(2),p(3),p(4)];
+                ps(count,:)=[alpha,beta,f1,f2,f3,f4,p(1),p(2),p(3),p(4)];
                 fvals(count,:)=[alpha,beta,f1,f2,f3,f4,fval(1),fval(2),fval(3),fval(4)];
                 if (mod(count,10000)==0)
                     display(count)

@@ -2,7 +2,7 @@ cd('C:/Users/Reed/Desktop/vaze_competition_paper')
 fid = fopen('carrier_data.txt','r');
 %optimization options
 options = optimset('Display', 'off') ;
-
+tic
 %get number of carriers and markets
 tline = fgetl(fid);
 first_line = strsplit(tline);
@@ -24,8 +24,8 @@ while ischar(tline)
   carrier.Markets = eval(carrier_cell{3});
   carrier.carrier_freq_ind = eval(carrier_cell{4});
   carrier.coef = eval(carrier_cell{5});
-  carrier.freqs = zeros(numel(carrier.Markets));
-  carrier.profits = zeros(numel(carrier.Markets));
+  carrier.freqs = zeros(numel(carrier.Markets),1);
+  carrier.profits = zeros(numel(carrier.Markets),1);
   carriers{line} = carrier;
   tline = fgetl(fid);
   line = line+1;
@@ -42,12 +42,13 @@ for i=1:num_segments
 end
 %myopic best response: each carrier decides frequencies for all the
 %segments that it is competing on
+loop=1;
 while (sum(diffs>eps)>0)
     for carrier_ind=1:num_carriers
         carrier = carriers{carrier_ind};
         %current frequencies of carrier on all of its market segments
         current_markets = Market_freqs(carrier.Markets);
-        f_i = zeros(numel(carrier.Markets));
+        f_i = zeros(numel(carrier.Markets),1);
         for i=1:numel(carrier.Markets)
             current_market_freqs = current_markets(i);
             %get frequency of current carrier curresponding to current
@@ -77,6 +78,9 @@ while (sum(diffs>eps)>0)
         carrier.freqs = x_i;
         carrier.profits = profits;
     end
+    display(loop)
+    loop =  loop +1;
+    toc
 end
 %final frequencies will be contained in Market freqs and carrier.freqs
 %(organized by market and carrier, respectively)

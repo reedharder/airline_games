@@ -27,7 +27,7 @@ for f1=1:20
                 c=c+1;
             end
             count=count+1;
-            ps(count,:)=[alpha,beta,f1,f2,f3,p(i),p(2),p(3)];
+            ps(count,:)=[alpha,beta,f1,f2,f3,p(1),p(2),p(3)];
             fvals(count,:)=[alpha,beta,f1,f2,f3,fval(1),fval(2),fval(3)];
         end
     end
