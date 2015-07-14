@@ -1,4 +1,4 @@
-cd('C:/Users/Reed/Desktop/vaze_competition_paper')
+cd('C:/Users/Reed/Desktop/vaze_competition_paper/matlab_2stagegames')
 fid = fopen('carrier_data.txt','r');
 %optimization options
 options = optimset('Display', 'off') ;
@@ -22,7 +22,7 @@ while ischar(tline)
   carrier.A = eval(carrier_cell{1});
   carrier.b = eval(carrier_cell{2})';
   carrier.Markets = eval(carrier_cell{3});
-  carrier.carrier_freq_ind = eval(carrier_cell{4});
+  carrier.freq_inds = eval(carrier_cell{4});
   carrier.coef = eval(carrier_cell{5});
   carrier.freqs = zeros(numel(carrier.Markets),1);
   carrier.profits = zeros(numel(carrier.Markets),1);
@@ -33,12 +33,12 @@ end
 fclose(fid);
 
 eps=0.001;
-diffs = ones(num_carriers) +eps;
+diffs = ones(num_carriers,1) +eps;
 %initialize markets array, constaining frequencies of carriers competing in
 %that market
 Market_freqs = {};
 for i=1:num_segments
-    Market_freqs{i}=ones(segment_competitors(i));
+    Market_freqs{i}=ones(segment_competitors(i),1);
 end
 %myopic best response: each carrier decides frequencies for all the
 %segments that it is competing on
@@ -49,16 +49,19 @@ while (sum(diffs>eps)>0)
         %current frequencies of carrier on all of its market segments
         current_markets = Market_freqs(carrier.Markets);
         f_i = zeros(numel(carrier.Markets),1);
+        display('o')
         for i=1:numel(carrier.Markets)
-            current_market_freqs = current_markets(i);
+            current_market_freqs = current_markets{i};
             %get frequency of current carrier curresponding to current
             %market
-            f_i(i) = current_market_freqs(carrier.freq_inds(i));           
+            f_i(i) = current_market_freqs(carrier.freq_inds(i));    %%PROBLEM HERE       
         end
+        display('oo')
         %set up profit function for this carrier
         profit_func=@(f_i)profit_stage1_network(f_i,carrier.coef, carrier.freq_inds,carrier.Markets,current_markets);
         %optimize frequencies of this carrier for profit
-        [x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],0,inf,[],options);
+        [x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
+        display('oo')
         %check for convergence
         diffs(carrier_ind)=sum(abs(f_i-x_i));
         %set new optimal frequencies into market frequencies data structure
@@ -68,15 +71,16 @@ while (sum(diffs>eps)>0)
             %get current market frequencies
             current_market_freqs = current_markets(i);
             %update frequency of current carrier in current market
-            current_market_freqs(carrier.freq_inds(i))= new_market_freq;
+            current_market_freqs{carrier.freq_inds(i)}= new_market_freq;
             %put new frequencies in market back into book keeping  market
             %frequencies data structure
             Market_freqs{carrier.Markets(i)}=current_market_freqs;                  
         end
+        display('oooo')
         %save current frequencies and profits for each market for this
         %carrier
         carrier.freqs = x_i;
-        carrier.profits = profits;
+        carrier.profits = profit;
     end
     display(loop)
     loop =  loop +1;
