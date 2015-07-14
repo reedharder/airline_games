@@ -285,27 +285,28 @@ aotp_mar = pd.read_csv("aotp_march.csv")
 aotp_mar['BI_MARKET']=aotp_jan.apply(create_market,1) 
 #DISSAGREGGATE BY AIRCRAFT TYPE LATER
 aotp_mar_times = aotp_mar[['UNIQUE_CARRIER','BI_MARKET','AIR_TIME']].groupby(['UNIQUE_CARRIER','BI_MARKET']).aggregate(lambda x: np.mean(x)/60)
+aotp_mar_times = aotp_mar_times.reset_index().groupby(['UNIQUE_CARRIER','BI_MARKET'])
 
-
-with open('carrier_data.txt','r') as outfile:
+with open('carrier_data.txt','w') as outfile:
     t100_gb_market = t100ranked.groupby('BI_MARKET')
     markets_sorted = sorted(list(set(t100ranked['BI_MARKET'].tolist())))
     num_mkts = len(markets_sorted)
     carriers_sorted = sorted(list(set(t100ranked['UNIQUE_CARRIER'].tolist())))
     num_carriers = len(carriers_sorted)
-    outfile.write(str(num_carriers) + "\t" + len(num_mkts) + "\n")
+    outfile.write(str(num_carriers) + "\t" + str(num_mkts) + "\n")
     mkt_sizes = [str(t100_gb_market.get_group(mkt)['MARKET_COMPETITORS'].iloc[0]) for mkt in markets_sorted]
     mkt_sizes_str = "["+",".join(mkt_sizes)+"]"
     outfile.write(mkt_sizes_str + "\n")
-    aug_fleet_gb_carrier = aug_fleet.grouby('carrier')
+    aug_fleet_gb_carrier = aug_fleet.groupby('carrier')
     for i, carrier in enumerate(carriers_sorted):
         carrier_data = t100ranked[t100ranked['UNIQUE_CARRIER']==carrier]
         carrier_num = i+1
         carrier_markets_str = carrier_data['BI_MARKET'].tolist()
-        fleet_assign=aug_fleet_gb_carrier.get_group('carrier').set_index('bimarket').loc[carrier_markets_str].reset_index()
+        fleet_assign=aug_fleet_gb_carrier.get_group(carrier).set_index('bimarket').loc[carrier_markets_str].reset_index()
+        fleet_assign['bimarket']=fleet_assign['index']
         fleet_assign=fleet_assign.sort(columns=['bimarket'])
         ac_types = sorted(list(set(fleet_assign['assigned_type'].tolist())))
-        fleet_assign_gb_type = fleet_assign.grouby('assigned_type')
+        fleet_assign_gb_type = fleet_assign.groupby('assigned_type')
         #build A matrix and b matrix
         A_rows = []
         b_rows = []
@@ -316,7 +317,16 @@ with open('carrier_data.txt','r') as outfile:
             #for each column of A matrix
             for mk in carrier_markets_str:
                 if mk in mkts_for_craft:
-                    block_hours=aotp_mar_times.get_group((carrier,mk))['AIR_TIME'].iloc[0]
+                    try:
+                        block_hours=aotp_mar_times.get_group((carrier,mk))['AIR_TIME'].iloc[0]
+                    except KeyError:
+                        try:
+                            aotp_mar_times_avg =aotp_mar[['UNIQUE_CARRIER','BI_MARKET','AIR_TIME']].groupby(['UNIQUE_CARRIER','BI_MARKET']).aggregate(lambda x: np.mean(x)/60)
+                            aotp_mar_times_avg =aotp_mar_times_avg.reset_index().groupby(['BI_MARKET'])
+                            block_hours=aotp_mar_times_avg.get_group(mk)['AIR_TIME'].iloc[0]
+                        except KeyError:
+                            mkk=mk.replace('ONT','LAX')
+                            block_hours=aotp_mar_times_avg.get_group(mkk)['AIR_TIME'].iloc[0]    
                     a_row.append(2*(block_hours +45/60))
                 else:
                     a_row.append(0)
@@ -360,7 +370,7 @@ with open('carrier_data.txt','r') as outfile:
         row_string+=']'+'\t'+'['
         row_string+=",".join([str(num) for num in carrier_coef])
         row_string+=']'+'\n'
-        outfile.write(rowstring)
+        outfile.write(row_string)
 
 
 
