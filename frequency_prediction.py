@@ -281,6 +281,49 @@ def construct_Ftable():
     fleet_lookup =pd.DataFrame(rows)      
     return fleet_lookup
 
+#A FUNCTION TO CONVERT FROM SHORTNAME TO NUMBER PERHAPSS
+def b43_get_type():
+    pass 
+
+#TIME RATIO METHOD TO GET F, compare to above
+def Ftable_new():
+    t100_all = pd.read_csv("t100_seg_all.csv")
+    treduced=t100_all[t100_all['UNIQUE_CARRIER'].isin(carriers_sorted)]
+    treduced['BI_MARKET']=treduced.apply(create_market,1)
+    treduced['AIR_TIME']= treduced['AIR_TIME']/60
+    treduced['IN_NETWORK'] = treduced.apply(lambda x: 1 if x['BI_MARKET'] in markets_sorted else 0, 1)
+    treduced['TIME_IN_NETWORK'] = treduced['IN_NETWORK']*treduced['AIR_TIME']
+    tr_gb = treduced.groupby(['UNIQUE_CARRIER','AIRCRAFT_TYPE'])
+    in_net_ratio = []
+    fleet_sizes =[]
+    Fs=[]
+    for row in fleet_lookup.to_dict('records'):
+        try: #CHECK THISSS WHY ('XE', 674)
+            carrier_type = tr_gb.get_group((row['carrier'],row['aircraft_type']))
+            rat=carrier_type['TIME_IN_NETWORK'].sum()/carrier_type['AIR_TIME'].sum()
+            in_net_ratio.append(rat)
+            model=type1[type1['AC_TYPEID']==row['aircraft_type']]['SHORT_NAME'].iloc[0]    
+            try:
+                craft_data =b43[b43['CARRIER']==row['carrier']][b43['MODEL']==model]
+            except IndexError:
+                print(model)
+                try:
+                    craft_data=b43[b43['CARRIER']==row['carrier']][b43['MODEL']==model[:-2]]                    
+                except IndexError:
+                    print(model)
+                    craft_data=b43[b43['CARRIER']==row['carrier']][b43['MODEL']==(model[:-2] + '/A')] 
+            fleet_size = craft_data[craft_data['OPERATING_STATUS']=='Y'].shape[0]       
+            fleet_sizes.append(fleet_size)
+            Fs.append(fleet_size*rat)
+        except KeyError:
+            in_net_ratio.append(0)
+            fleet_sizes.append(0)
+            Fs.append(0)
+    fleet_lookup['F']=Fs
+    fleet_lookup['fleet_full']=fleet_sizes    
+    fleet_lookup['in_net_ratio']=in_net_ratio 
+        
+    
 #flgith times by airline market combo
 aotp_mar = pd.read_csv("aotp_march.csv")
 aotp_mar['BI_MARKET']=aotp_jan.apply(create_market,1) 
@@ -332,7 +375,7 @@ with open('carrier_data.txt','w') as outfile:
                 else:
                     a_row.append(0)
             A_rows.append(a_row)
-            F = sum([fleet_lookup.groupby(['carrier','aircraft_type']).get_group((carrier,int(subtype)))['fleet_count'].iloc[0] for subtype in ac_type.split('-') ])
+            F = sum([fleet_lookup.groupby(['carrier','aircraft_type']).get_group((carrier,int(subtype)))['F'].iloc[0] for subtype in ac_type.split('-') ])
             b_rows.append(18*F)
         carrier_Markets = [markets_sorted.index(mk)+1 for mk in carrier_markets_str]
         carrier_freq_ind = carrier_data['MARKET_RANK'].tolist()
@@ -379,7 +422,19 @@ with open('carrier_data.txt','w') as outfile:
 network_results_raw = pd.read_csv("matlab_2stagegames/network_results.csv",header=None)
 network_results = t100ranked[['UNIQUE_CARRIER','BI_MARKET','MARKET_RANK','MARKET_COMPETITORS','DAILY_FREQ']]
 network_results['EST_FREQ'] = network_results_raw[2].tolist()
-
+results_market_grouped =network_results.groupby('BI_MARKET')
+MAPES=[]
+for mkt in markets_sorted:
+    mkt_gb = results_market_grouped.get_group(mkt)
+    fs = mkt_gb['DAILY_FREQ'].tolist()
+    f_hats = mkt_gb['EST_FREQ'].tolist()
+    mape = sum([abs(f_hat-f) for f_hat,f in zip(f_hats,fs)])/sum(fs)
+    MAPES.append(mape)
+mape_column = []
+for competitors, mape in zip(mkt_sizes, MAPES):
+    mape_column += np.repeat(mape,int(competitors)).tolist()
+network_results['MAPE'] = mape_column
+network_results.to_csv('network_MAPE.csv',sep='\t')
 
 
 
