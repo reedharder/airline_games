@@ -26,7 +26,7 @@ ms_cuttoff is cumulative market share to consider in each market
 '''
 def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",directory="C:/Users/Reed/Desktop/vaze_competition_paper", quarters=[1,2,3,4], \
     t100_fn="T100_2007.csv",p52_fn="P52_2007.csv", ac_type_fn ="AIRCRAFT_TYPE_LOOKUP.csv",b43_fn = "SCHEDULE_B43.csv", \
-    freq_cuttoff = .5, ms_cuttoff=.9, airports = ['SEA','PDX','SFO','SAN','LAX','LAS','PHX','OAK','ONT','SMF','SJC']):
+    freq_cuttoff = .5, ms_cuttoff=.1, airports = ['SEA','PDX','SFO','SAN','LAX','LAS','PHX','OAK','ONT','SMF','SJC']):
         
     #read in revelant bts files and supplementary data files 
     os.chdir("C:/Users/Reed/Desktop/vaze_competition_paper")
@@ -93,6 +93,7 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",direc
         new_group = market_rank(market_group)
         grouplist.append(new_group)
     t100ranked = pd.concat(grouplist,axis=0)
+    t100ranked=t100ranked.sort(columns=['BI_MARKET','MARKET_RANK'])
     ##t100_avgd_clip = t100_avgd_clip.groupby('BI_MARKET').apply(market_rank)
     t100ranked.to_csv(output_file)
 
@@ -134,7 +135,7 @@ def market_rank(gb):
     #cumulative market share upto that ranking
     gb['PREV_CUM_MS']=gb.apply(lambda x: gb['MS_TOT'][:x['MARKET_RANK']-1].sum(), axis=1)
     #remove those carriers that appear after cuttoff
-    gb=gb[gb['PREV_CUM_MS']<=ms_cuttoff]
+    gb=gb[gb['MS_TOT']>=ms_cuttoff]
     #recalculate market shares
     Mtot = gb['PASSENGERS'].sum()
     gb['MARKET_TOT'] = np.repeat(Mtot,gb.shape[0] )    
@@ -279,6 +280,87 @@ def construct_Ftable():
     fleet_lookup =pd.DataFrame(rows)      
     return fleet_lookup
 
+#flgith times by airline market combo
+aotp_mar = pd.read_csv("aotp_march.csv")
+aotp_mar['BI_MARKET']=aotp_jan.apply(create_market,1) 
+#DISSAGREGGATE BY AIRCRAFT TYPE LATER
+aotp_mar_times = aotp_mar[['UNIQUE_CARRIER','BI_MARKET','AIR_TIME']].groupby(['UNIQUE_CARRIER','BI_MARKET']).aggregate(lambda x: np.mean(x)/60)
+
+
+with open('carrier_data.txt','r') as outfile:
+    t100_gb_market = t100ranked.groupby('BI_MARKET')
+    markets_sorted = sorted(list(set(t100ranked['BI_MARKET'].tolist())))
+    num_mkts = len(markets_sorted)
+    carriers_sorted = sorted(list(set(t100ranked['UNIQUE_CARRIER'].tolist())))
+    num_carriers = len(carriers_sorted)
+    outfile.write(str(num_carriers) + "\t" + len(num_mkts) + "\n")
+    mkt_sizes = [str(t100_gb_market.get_group(mkt)['MARKET_COMPETITORS'].iloc[0]) for mkt in markets_sorted]
+    mkt_sizes_str = "["+",".join(mkt_sizes)+"]"
+    outfile.write(mkt_sizes_str + "\n")
+    aug_fleet_gb_carrier = aug_fleet.grouby('carrier')
+    for i, carrier in enumerate(carriers_sorted):
+        carrier_data = t100ranked[t100ranked['UNIQUE_CARRIER']==carrier]
+        carrier_num = i+1
+        carrier_markets_str = carrier_data['BI_MARKET'].tolist()
+        fleet_assign=aug_fleet_gb_carrier.get_group('carrier').set_index('bimarket').loc[carrier_markets_str].reset_index()
+        fleet_assign=fleet_assign.sort(columns=['bimarket'])
+        ac_types = sorted(list(set(fleet_assign['assigned_type'].tolist())))
+        fleet_assign_gb_type = fleet_assign.grouby('assigned_type')
+        #build A matrix and b matrix
+        A_rows = []
+        b_rows = []
+        for ac_type in ac_types:
+            mkts_for_craft_df = fleet_assign_gb_type.get_group(ac_type)
+            mkts_for_craft = mkts_for_craft_df['bimarket'].tolist()
+            a_row = []
+            #for each column of A matrix
+            for mk in carrier_markets_str:
+                if mk in mkts_for_craft:
+                    block_hours=aotp_mar_times.get_group((carrier,mk))['AIR_TIME'].iloc[0]
+                    a_row.append(2*(block_hours +45/60))
+                else:
+                    a_row.append(0)
+            A_rows.append(a_row)
+            F = sum([fleet_lookup.groupby(['carrier','aircraft_type']).get_group((carrier,int(subtype)))['fleet_count'].iloc[0] for subtype in ac_type.split('-') ])
+            b_rows.append(18*F)
+        carrier_Markets = [markets_sorted.index(mk)+1 for mk in carrier_markets_str]
+        carrier_freq_ind = carrier_data['MARKET_RANK'].tolist()
+        #get coefficients, stacked in order of markets
+        carrier_coef = []
+        for record in carrier_data.to_dict('records'):
+            Cold = 10000
+            Cnew = record['FLIGHT_COST']
+            Mold = 1000
+            Mnew = record['MARKET_TOT']
+            freq_ind = record['MARKET_RANK']
+            if record['MARKET_COMPETITORS']==1:
+                base = [-95164.0447,-36238.3083,1148.0305]
+                transcoef = [-(Mnew/Mold)*base[0],(Mnew/Mold)*(Cold-base[1])-Cnew,-(Mnew/Mold)*base[2] ]
+            elif record['MARKET_COMPETITORS']==2:
+                base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+                transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[j])-Cnew if (i+1)==freq_ind else -(Mnew/Mold)*base[j] for i,j in enumerate(range(1,3))  ] + [-(Mnew/Mold)*base[i] for i in range(3,6)]
+            elif record['MARKET_COMPETITORS']==3:
+                base=[-150395.5496,-10106.6470,13135.9798,13136.1506,264.4822,-376.1793,-376.1781,270.2080,270.1927,-260.0113]
+                transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[j])-Cnew if (i+1)==freq_ind else -(Mnew/Mold)*base[j] for i,j in enumerate(range(1,4))  ] + [-(Mnew/Mold)*base[i] for i in range(4,10)]
+            else:
+                base=[-101456.3779,-5039.0076,6450.0318,6450.0511,6450.0624,134.9756,-137.7129,-137.7135,-137.7157,169.9196,169.9198,169.9212,-126.7018,-126.7025,-126.7034]    
+                transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[j])-Cnew if (i+1)==freq_ind else -(Mnew/Mold)*base[j] for i,j in enumerate(range(1,5))  ] + [-(Mnew/Mold)*base[i] for i in range(5,15)]
+            carrier_coef += transcoef 
+        #construct rowstring
+        row_string = str(carrier_num) +'\t' +'['
+        for a_row in A_rows:
+            row_string+=",".join([str(num) for num in a_row])
+            row_string+=";"
+        row_string+=']'+'\t'+'['
+        row_string+=",".join([str(num) for num in b_rows])
+        row_string+=']'+'\t'+'['
+        row_string+=",".join([str(num) for num in carrier_Markets])
+        row_string+=']'+'\t'+'['
+        row_string+=",".join([str(num) for num in carrier_freq_ind])
+        row_string+=']'+'\t'+'['
+        row_string+=",".join([str(num) for num in carrier_coef])
+        row_string+=']'+'\n'
+        outfile.write(rowstring)
 
 
 
@@ -463,8 +545,11 @@ o_gs = list(set(routes['ORIGIN'].tolist() +routes['DESTINATION'].tolist()))
 
 #MARKET SIZ PER DAY
 
+
+
+
 #Intercept	f1	f2	f1^2	f2^2	f1*f2
-coef=[-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+coef2=[-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
 with open('coefsN2.txt','w') as outfile:
     for i,row in enumerate(mreg2.to_dict('records')):
         Mold = 1000
