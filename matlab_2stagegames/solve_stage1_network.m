@@ -49,19 +49,20 @@ while (sum(diffs>eps)>0)
         %current frequencies of carrier on all of its market segments
         current_markets = Market_freqs(carrier.Markets);
         f_i = zeros(numel(carrier.Markets),1);
-        display('o')
+        
+        %loop through markets, get frequency of carrier at these markets
         for i=1:numel(carrier.Markets)
             current_market_freqs = current_markets{i};
-            %get frequency of current carrier curresponding to current
+            %get frequency of current carrier corresponding to current
             %market
             f_i(i) = current_market_freqs(carrier.freq_inds(i));    %%PROBLEM HERE       
         end
-        display('oo')
+        
         %set up profit function for this carrier
         profit_func=@(f_i)profit_stage1_network(f_i,carrier.coef, carrier.freq_inds,carrier.Markets,current_markets);
         %optimize frequencies of this carrier for profit
         [x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
-        display('oo')
+        
         %check for convergence
         diffs(carrier_ind)=sum(abs(f_i-x_i));
         %set new optimal frequencies into market frequencies data structure
@@ -69,14 +70,14 @@ while (sum(diffs>eps)>0)
             %frequency in market i 
             new_market_freq = x_i(i);
             %get current market frequencies
-            current_market_freqs = current_markets(i);
+            current_market_freqs = current_markets{i};
             %update frequency of current carrier in current market
-            current_market_freqs{carrier.freq_inds(i)}= new_market_freq;
+            current_market_freqs(carrier.freq_inds(i))= new_market_freq;
             %put new frequencies in market back into book keeping  market
             %frequencies data structure
             Market_freqs{carrier.Markets(i)}=current_market_freqs;                  
         end
-        display('oooo')
+        
         %save current frequencies and profits for each market for this
         %carrier
         carrier.freqs = x_i;
@@ -89,4 +90,21 @@ end
 %final frequencies will be contained in Market freqs and carrier.freqs
 %(organized by market and carrier, respectively)
 %corresponding profits are in carrier.profits
+
+%write market freqs in a reasonable matrix
+freq_results_mat = zeros(sum(segment_competitors),3);
+%row index
+row_ind =1;
+%for each market...
+for mk=1:numel(segment_competitors)
+    market_data = Market_freqs{mk};
+    %for each competitor in market...
+    rank=1;
+    for row=row_ind:row_ind+segment_competitors(mk) - 1
+        freq_results_mat(row,:)=[mk,rank,market_data(rank)];
+        rank=rank+1;
+    end
+    row_ind = row_ind+segment_competitors(mk);
+end
+dlmwrite('network_results.csv',freq_results_mat,'delimiter',',','precision','%.4f')
 

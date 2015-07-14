@@ -208,6 +208,7 @@ def fleet_assign(market_table_fn= "nonstop_competitive_markets.csv",ac_type_fn =
     fleet_dist.to_csv("fleetdist1.csv", sep='\t')
     
     #ADDITIONAL CODE TO FIND NUMBER OF ASSIGNED SEATS FOR ASSIGNED AIRCRAFT IN FLEET DISTRIBUTION TABLE
+    #MAKE THIS A SECOND FUNCTION
     '''
     by_carrier=fleet_dist[['carrier','type_list']].groupby('carrier').aggregate(lambda x: x.iloc[0]).reset_index()
     seat_lookup = {}
@@ -374,10 +375,10 @@ with open('carrier_data.txt','w') as outfile:
 
 
 
-
-
-
-
+#FUNCTION TO BUILD TABLE FROM NEWORK GAME RESULTS FROM MATLAB
+network_results_raw = pd.read_csv("matlab_2stagegames/network_results.csv",header=None)
+network_results = t100ranked[['UNIQUE_CARRIER','BI_MARKET','MARKET_RANK','MARKET_COMPETITORS','DAILY_FREQ']]
+network_results['EST_FREQ'] = network_results_raw[2].tolist()
 
 
 
