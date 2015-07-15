@@ -91,7 +91,9 @@ end
 %(organized by market and carrier, respectively)
 %corresponding profits are in carrier.profits
 
-%write market freqs in a reasonable matrix
+%write market freqs into a reasonable matrix, columns as market, rank, and
+%frequency, to be matched with sorted dataframe t100ranked in python (see
+%function FUNCTION NAME
 freq_results_mat = zeros(sum(segment_competitors),3);
 %row index
 row_ind =1;
@@ -106,5 +108,5 @@ for mk=1:numel(segment_competitors)
     end
     row_ind = row_ind+segment_competitors(mk);
 end
-dlmwrite('network_results.csv',freq_results_mat,'delimiter',',','precision','%.4f')
+dlmwrite('network_results_revisedF.csv',freq_results_mat,'delimiter',',','precision','%.4f')
 

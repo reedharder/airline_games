@@ -285,6 +285,16 @@ def construct_Ftable():
 def b43_get_type():
     pass 
 
+#A FUNCTION TO GET TABLE OF "SHORT" NAMES, WHICH ARE APPARENTLY NOT INVENTORY MODEL NAMES, I SUPPOSE SUCH A CONVERSION TABLE WILL BE USEFUL LATER
+def create_shortname_table():
+    keys =sorted(list(set(fleet_lookup['aircraft_type'].tolist())))
+    reduced_type = type1.set_index('AC_TYPEID').loc[keys].reset_index()[['index','SHORT_NAME']]
+    #apparently corresponding model 
+    model = [['SF-340/B'],['EMB-120'],['DASH8-Q4'],['DHC8-200'],['B737-7','B737-7/L'],['B737-8'],['B737-5'],['B737-4'],['B737-3'],['B757-2'],['B767-2'],['B767-3'],['B777-2'],['CRJ-2/4'],['RJ-700'],['B737-9'],['CRJ-900'],['MD-80'],['EMB-135'],['EMB-145'],['EMB-140'],['A320-1/2'],['A319'],['A321']]    
+    reduced_type['model']=model
+    
+
+
 #TIME RATIO METHOD TO GET F, compare to above
 def Ftable_new():
     t100_all = pd.read_csv("t100_seg_all.csv")
@@ -401,7 +411,7 @@ with open('carrier_data.txt','w') as outfile:
                 transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[j])-Cnew if (i+1)==freq_ind else -(Mnew/Mold)*base[j] for i,j in enumerate(range(1,5))  ] + [-(Mnew/Mold)*base[i] for i in range(5,15)]
             carrier_coef += transcoef 
         #construct rowstring
-        row_string = str(carrier_num) +'\t' +'['
+        row_string = '['
         for a_row in A_rows:
             row_string+=",".join([str(num) for num in a_row])
             row_string+=";"
@@ -419,7 +429,7 @@ with open('carrier_data.txt','w') as outfile:
 
 
 #FUNCTION TO BUILD TABLE FROM NEWORK GAME RESULTS FROM MATLAB
-network_results_raw = pd.read_csv("matlab_2stagegames/network_results.csv",header=None)
+network_results_raw = pd.read_csv("matlab_2stagegames/network_results_revisedF.csv",header=None)
 network_results = t100ranked[['UNIQUE_CARRIER','BI_MARKET','MARKET_RANK','MARKET_COMPETITORS','DAILY_FREQ']]
 network_results['EST_FREQ'] = network_results_raw[2].tolist()
 results_market_grouped =network_results.groupby('BI_MARKET')
@@ -434,7 +444,7 @@ mape_column = []
 for competitors, mape in zip(mkt_sizes, MAPES):
     mape_column += np.repeat(mape,int(competitors)).tolist()
 network_results['MAPE'] = mape_column
-network_results.to_csv('network_MAPE.csv',sep='\t')
+network_results.to_csv('network_MAPE_revisedF.csv',sep='\t')
 
 
 
