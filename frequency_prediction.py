@@ -145,16 +145,13 @@ def market_rank(gb):
     return gb    
     
     
-    
-#COEFFICIENT CALCULATION FOR 2, 3 4, and 1
-    #use .1 cuttoff to remove 6
-    
-#COMPARATIVE STATICS, in context of game theory, COMPARATIVE DYNMACS
+
   
 '''
 function to find most common type of plane used on each segment
 and to get a fleet composition for network for each carrier
 also, calculate F
+COMMENT, AND SEE NEW F CALCULATIONS 
 '''  
 def fleet_assign(market_table_fn= "nonstop_competitive_markets.csv",ac_type_fn ="AIRCRAFT_TYPE_LOOKUP.csv",b43_fn = "SCHEDULE_B43.csv"):
     t100ranked = pd.read_csv(market_table_fn)
@@ -207,27 +204,41 @@ def fleet_assign(market_table_fn= "nonstop_competitive_markets.csv",ac_type_fn =
     fleet_dist = pd.DataFrame(rows)    
     fleet_dist.to_csv("fleetdist1.csv", sep='\t')
     
-    #ADDITIONAL CODE TO FIND NUMBER OF ASSIGNED SEATS FOR ASSIGNED AIRCRAFT IN FLEET DISTRIBUTION TABLE
-    #MAKE THIS A SECOND FUNCTION
-    '''
+    return fleet_dist
+    
+    
+    
+    
+'''
+function to find number of seats in an assigned aircraft for a fleet distribution table. requires table returned by fleet_assign function
+augmented with "assigned_type" column assigning an aircraft type to a segment-carrier combination
+'''
+def seat_assign(fleet_dist_aug_fn='fleet_dist_aug.csv', b43_fn = "SCHEDULE_B43.csv"):
+    #read augmented file
+    aug_fleet = pd.read_csv(fleet_dist_fn) 
+    b43 = pd.read_csv(b43_fn)
+    #get table of top craft for each carrier
     by_carrier=fleet_dist[['carrier','type_list']].groupby('carrier').aggregate(lambda x: x.iloc[0]).reset_index()
-    seat_lookup = {}
+    #create dictionary that shows seats for a given carrier/craft
+    seat_lookup = {}   
+    '''
+    PERHAPS CHANGE THIS METHOD GIVEN INTER CARRIER VARIATION
+    '''
     for row in by_carrier.to_dict('records'):        
         seat_lookup[row['carrier']] = {rec[0]:rec[1] for rec in row['type_list']}
-    aug_fleet = pd.read_csv('fleet_dist_aug.csv')  
+    #function to get number of seats for assigned type
     def assigned_seats(row):
         carr = row['carrier']
         plane_list=str(row['assigned_type']).split('-')
         seatlist  = [seat_lookup[carr][int(plane)] for plane in plane_list]
         return round(np.mean(seatlist))
+    #create new column for this data
     aug_fleet['assigned_seats'] = aug_fleet.apply(assigned_seats, axis=1)
-    '''
-    #carrier distribution
     
-    #MAKE SURE MARKET/BIMARKET times and Frequencies are consistent
+
         
     
-    '''
+'''
 function to create a bidirectional market indicator (with airports sorted by text) for origin-destination pairs
 '''    
 def create_market(row):
@@ -250,7 +261,6 @@ def find_seats(row):
             seats =b43[b43['MODEL']==(model[:-2] + '/A')]['NUMBER_OF_SEATS'].iloc[0]
     return seats
     
-return fleet_dist
 
 #estimate size of an aircraft's fleet of a certain type from the total airtime of that fleet type
 #PASS quarters VARIABLE
@@ -292,6 +302,7 @@ def create_shortname_table():
     #apparently corresponding model 
     model = [['SF-340/B'],['EMB-120'],['DASH8-Q4'],['DHC8-200'],['B737-7','B737-7/L'],['B737-8'],['B737-5'],['B737-4'],['B737-3'],['B757-2'],['B767-2'],['B767-3'],['B777-2'],['CRJ-2/4'],['RJ-700'],['B737-9'],['CRJ-900'],['MD-80'],['EMB-135'],['EMB-145'],['EMB-140'],['A320-1/2'],['A319'],['A321']]    
     reduced_type['model']=model
+    #FIX
     
 
 
