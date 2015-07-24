@@ -367,10 +367,11 @@ function to create table of carrier and market data used by matlab myopic best r
 #NOTE:CREATE AND OFFICIAL INDEX OF CARRIER MARKET COMBO FOR EASY MAPPING
 
 '''    
-def create_network_game_datatable(t100ranked = "nonstop_competitive_markets.csv", fleet_lookup_fn = "fleet_lookup.csv",aotp_fn = 'aotp_mar.csv',fleet_dist_aug_fn='fleet_dist_aug.csv'):   
+def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.csv", fleet_lookup_fn = "fleet_lookup.csv",aotp_fn = 'aotp_march.csv',fleet_dist_aug_fn='fleet_dist_aug.csv'):   
     #read in data files     
     fleet_lookup= pd.read_csv(fleet_lookup_fn)
     aug_fleet = pd.read_csv(fleet_dist_aug_fn) 
+    t100ranked  = pd.read_csv(t100ranked_fn)
     #flgith times by airline market combo
     aotp_mar = pd.read_csv(aotp_fn)
     aotp_mar['BI_MARKET']=aotp_mar.apply(create_market,1) 
@@ -404,7 +405,7 @@ def create_network_game_datatable(t100ranked = "nonstop_competitive_markets.csv"
             carrier_markets_str = carrier_data['BI_MARKET'].tolist() #markets under consideration
             #from fleet table get relevant rows on current carrier in order of sorted markets
             fleet_assign=aug_fleet_gb_carrier.get_group(carrier).set_index('bimarket').loc[carrier_markets_str].reset_index()
-            fleet_assign['bimarket']=fleet_assign['index']
+            ##fleet_assign['bimarket']=fleet_assign['index']
             fleet_assign=fleet_assign.sort(columns=['bimarket'])
             #get different craft types  for this carrier (sorted)
             ac_types = sorted(list(set(fleet_assign['assigned_type'].tolist())))
@@ -490,13 +491,14 @@ def create_network_game_datatable(t100ranked = "nonstop_competitive_markets.csv"
             row_string+=']'+'\n'
             #write to outfile
             outfile.write(row_string)
-            return None
+    return None
 
 '''
 function to build easily read data table from MATLAB output
 '''
-def create_results_table(t100ranked = "nonstop_competitive_markets.csv"):
-    network_results_raw = pd.read_csv("matlab_2stagegames/network_results_revisedF.csv",header=None)
+def create_results_table(input_fn = "matlab_2stagegames/network_results_revisedF.csv",t100ranked_fn = "nonstop_competitive_markets.csv"):
+    t100ranked  = pd.read_csv(t100ranked_fn)    
+    network_results_raw = pd.read_csv(input_fn,header=None)
     network_results = t100ranked[['UNIQUE_CARRIER','BI_MARKET','MARKET_RANK','MARKET_COMPETITORS','DAILY_FREQ']]
     network_results['EST_FREQ'] = network_results_raw[2].tolist()
     results_market_grouped =network_results.groupby('BI_MARKET')
@@ -514,7 +516,7 @@ def create_results_table(t100ranked = "nonstop_competitive_markets.csv"):
     for competitors, mape in zip(mkt_sizes, MAPES):
         mape_column += np.repeat(mape,int(competitors)).tolist()
     network_results['MAPE'] = mape_column
-    network_results.to_csv('network_MAPE_revisedF.csv',sep='\t')
+    network_results.to_csv('network_MAPE_revisedF2_inf.csv',sep='\t')
     return network_results
 
 

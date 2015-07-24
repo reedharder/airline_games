@@ -61,8 +61,9 @@ while (sum(diffs>eps)>0)
         %set up profit function for this carrier
         profit_func=@(f_i)profit_stage1_network(f_i,carrier.coef, carrier.freq_inds,carrier.Markets,current_markets);
         %optimize frequencies of this carrier for profit
-        [x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
-        
+        %[x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
+        [x_i, profit]=fmincon(profit_func,f_i,[],[],[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*50,[],options);
+
         %check for convergence
         diffs(carrier_ind)=sum(abs(f_i-x_i));
         %set new optimal frequencies into market frequencies data structure
@@ -108,5 +109,5 @@ for mk=1:numel(segment_competitors)
     end
     row_ind = row_ind+segment_competitors(mk);
 end
-dlmwrite('network_results_revisedF.csv',freq_results_mat,'delimiter',',','precision','%.4f')
+dlmwrite('network_results_revisedF_inf.csv',freq_results_mat,'delimiter',',','precision','%.4f')
 
