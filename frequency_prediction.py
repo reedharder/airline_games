@@ -10,6 +10,7 @@ import os
 import numpy as np
 import pandas as pd
 from itertools import product
+#LOAD NEW KIND OF T100 file 
 
 '''
 STEP ONE: CREATE NETWORK PROFILE TABLE, MAJOR CARRIERS IN MAJOR MARKETS IN SELECT AIRPORTS
@@ -70,11 +71,11 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",aotp_
     expenses_by_type['EXP_PER_HOUR'] = expenses_by_type['TOT_AIR_OP_EXPENSES'] / expenses_by_type['TOTAL_AIR_HOURS']
 
     #average relevant monthly frequencie to get daily freqencies
-    t100fields =['BI_MARKET','UNIQUE_CARRIER','ORIGIN', 'DEST','AIRCRAFT_TYPE','DEPARTURES_SCHEDULED','SEATS','PASSENGERS','DISTANCE','AIR_TIME']
+    t100fields =['BI_MARKET','UNIQUE_CARRIER','ORIGIN', 'DEST','AIRCRAFT_TYPE','DEPARTURES_SCHEDULED','DEPARTURES_PERFORMED','SEATS','PASSENGERS','DISTANCE','AIR_TIME']
     t100_summed = relevant_t100[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET','ORIGIN','DEST','AIRCRAFT_TYPE']).aggregate({'DEPARTURES_SCHEDULED':lambda x: np.sum(x),'SEATS':lambda x: np.sum(x)/(365/(4/len(quarters))),'PASSENGERS':lambda x: np.sum(x)/(365/(4/len(quarters))),'DISTANCE':np.mean,'AIR_TIME': np.mean}).reset_index()
     #convert airtime to hours
     t100_summed['AIR_HOURS']=(t100_summed['AIR_TIME']/60)
-    t100_summed['FLIGHT_TIME']=t100_summed['AIR_HOURS']/t100_summed['DEPARTURES_SCHEDULED']
+    t100_summed['FLIGHT_TIME']=t100_summed['AIR_HOURS']/t100_summed['DEPARTURES_PERFORMED']
     
     t100_summed['DAILY_FREQ']=t100_summed['DEPARTURES_SCHEDULED']/(365/(4/len(quarters)))
     t100_summed = t100_summed.drop('AIR_TIME',axis=1)
@@ -82,7 +83,8 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",aotp_
     t100fields =['BI_MARKET','UNIQUE_CARRIER','AIRCRAFT_TYPE','DEPARTURES_SCHEDULED','SEATS','PASSENGERS','DISTANCE','AIR_HOURS', 'DAILY_FREQ']
     #merge t100 data with cost data
     t100_summed=pd.merge(t100_summed,expenses_by_type,on=['AIRCRAFT_TYPE','UNIQUE_CARRIER'])
-    t100_summed['FLIGHT_COST'] = t100_summed['AIR_HOURS']*t100_summed['EXP_PER_HOUR']/t100_summed['DEPARTURES_SCHEDULED'] #get cost per flight type
+    #NOTE, CHECL FLIGHT COSTS HERE, PERHAPS DO DEPARTURES PERFORMED
+    t100_summed['FLIGHT_COST'] = t100_summed['AIR_HOURS']*t100_summed['EXP_PER_HOUR']/t100_summed['DEPARTURES_PERFORMED'] #get cost per flight type
     #NOTE: FOR THIS HOURS AND FRACTION FOF TOTAL HOURS FOR FLIGHT FOR CARRIER MUST BE ADDED , I THINK IT CAN BE DONE HERE 
     t100_summed = t100_summed[t100_summed['PASSENGERS']>0]
     t100_summed = t100_summed[t100_summed['DEPARTURES_SCHEDULED']>0]    
@@ -124,7 +126,8 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",aotp_
                 block_hours=aotp_mar_times_avg.get_group(mkk)['AIR_TIME'].iloc[0]   
         return block_hours
     t100ranked['AOTP_FLIGHT_TIME']=t100ranked.apply(seg_block_hours,1)
-    
+    t100ranked['BACKFOURTH'] = 2*(t100ranked['AOTP_FLIGHT_TIME']+45/60)
+
     ##t100_avgd_clip = t100_avgd_clip.groupby('BI_MARKET').apply(market_rank)
     t100ranked.to_csv(output_file)
     
@@ -394,6 +397,14 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
         mkt_sizes = [str(t100_gb_market.get_group(mkt)['MARKET_COMPETITORS'].iloc[0]) for mkt in markets_sorted]
         mkt_sizes_str = "["+",".join(mkt_sizes)+"]"
         outfile.write(mkt_sizes_str + "\n")
+        #write line of empirical frequencies in order of sorted markets (each sorted my market rank)
+        empirical_freqs = t100ranked['DAILY_FREQ'].tolist()
+        empirical_freqs_str = "["+",".join([str(f) for f in empirical_freqs])+"]"
+        outfile.write(empirical_freqs_str + "\n")
+        #write line of the carrier (by MATLAB index in carriers sorted) of each of the frequencies above
+        corresponding_carriers = [carriers_sorted.index(CR) +1  for CR in t100ranked['UNIQUE_CARRIER'].tolist()]
+        corresponding_carriers_str = "["+",".join([str(cr) for cr in corresponding_carriers])+"]"
+        outfile.write(corresponding_carriers_str + "\n")
         #group fleet table by carrier for ease of access
         aug_fleet_gb_carrier = aug_fleet.groupby('carrier')
         #loop through carriers, for each line, write A matrix for optimization inequality constraints, corresponding b vector, indices
@@ -496,15 +507,22 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
 '''
 function to build easily read data table from MATLAB output
 '''
-def create_results_table(input_fn = "matlab_2stagegames/network_results_revisedF.csv",t100ranked_fn = "nonstop_competitive_markets.csv"):
-    t100ranked  = pd.read_csv(t100ranked_fn)    
+def create_results_table(outfile_fn='network_MAPE_revisedF2_inf.csv',input_fn = "matlab_2stagegames/network_results_revisedF.csv",t100ranked_fn = "nonstop_competitive_markets.csv"):
+    #read in original market profile file    
+    t100ranked  = pd.read_csv(t100ranked_fn) 
+    #use subset of this as base for results table
     network_results_raw = pd.read_csv(input_fn,header=None)
     network_results = t100ranked[['UNIQUE_CARRIER','BI_MARKET','MARKET_RANK','MARKET_COMPETITORS','DAILY_FREQ']]
+    # add estimated frequency column from MATLAB results
     network_results['EST_FREQ'] = network_results_raw[2].tolist()
-    results_market_grouped =network_results.groupby('BI_MARKET')
+    #group results by market
+    results_market_grouped =network_results.groupby('BI_MARKET')    
     t100_gb_market = t100ranked.groupby('BI_MARKET')
+    #extract markets in alphabetical order
     markets_sorted = sorted(list(set(t100ranked['BI_MARKET'].tolist())))
+    #get number of competitors in all these markets
     mkt_sizes = [str(t100_gb_market.get_group(mkt)['MARKET_COMPETITORS'].iloc[0]) for mkt in markets_sorted]
+    #compute market-wise MAPE    
     MAPES=[]
     for mkt in markets_sorted:
         mkt_gb = results_market_grouped.get_group(mkt)
@@ -512,11 +530,34 @@ def create_results_table(input_fn = "matlab_2stagegames/network_results_revisedF
         f_hats = mkt_gb['EST_FREQ'].tolist()
         mape = sum([abs(f_hat-f) for f_hat,f in zip(f_hats,fs)])/sum(fs)
         MAPES.append(mape)
+    #append this calculation to network results table (repeated where market is same)
     mape_column = []
     for competitors, mape in zip(mkt_sizes, MAPES):
         mape_column += np.repeat(mape,int(competitors)).tolist()
     network_results['MAPE'] = mape_column
-    network_results.to_csv('network_MAPE_revisedF2_inf.csv',sep='\t')
+    #add individual Error column
+    network_results['Error']= abs(network_results['DAILY_FREQ']-network_results['EST_FREQ'])/network_results['DAILY_FREQ']
+    #compute carrier-wise MAPE
+    carriers_sorted = sorted(list(set(t100ranked['UNIQUE_CARRIER'].tolist())))
+    results_carrier_grouped =network_results.groupby('UNIQUE_CARRIER')
+    network_results = network_results.sort(columns=['UNIQUE_CARRIER','BI_MARKET'])
+    CARRIER_MAPES=[]    
+    num_mkts =  [] #corresponding list of number of markets per carrier
+    for cr in carriers_sorted:
+        crt_gb = results_carrier_grouped.get_group(cr)
+        fs = crt_gb['DAILY_FREQ'].tolist()
+        f_hats = crt_gb['EST_FREQ'].tolist()
+        mape = sum([abs(f_hat-f) for f_hat,f in zip(f_hats,fs)])/sum(fs)
+        CARRIER_MAPES.append(mape)
+        num_mkts.append(crt_gb.shape[0])
+    #append this calculation to network results table (repeated where carrier is same)
+    crmape_column = []    
+    for mkts, mape in zip(num_mkts, CARRIER_MAPES):
+        crmape_column += np.repeat(mape,int(mkts)).tolist()
+    network_results['CR_MAPE'] = crmape_column
+    #resort dataframe and save to file
+    network_results = network_results.sort(columns=['BI_MARKET','MARKET_RANK'])
+    network_results.to_csv(outfile_fn,sep='\t')
     return network_results
 
 
