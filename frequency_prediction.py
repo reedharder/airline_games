@@ -464,7 +464,8 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
             carrier_freq_ind = carrier_data['MARKET_RANK'].tolist()
             #get coefficients, stacked in order of markets
             carrier_coef = []
-            
+           
+            #go through each market of carrier (in alphabetical order)
             for record in carrier_data.to_dict('records'):
                 #parameters for transformation from base coefficients to coefficients reflecting particular costs and market sizes
                 #old and new costs
@@ -493,21 +494,29 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
                 if record['MARKET_COMPETITORS']==1:
                     base = [-95164.0447,-36238.3083,1148.0305]
                     transcoef = [-(Mnew/Mold)*base[0],(Mnew/Mold)*(Cold-base[1])-Cnew,-(Mnew/Mold)*base[2] ]
+                    coef_cats = [100,100,100]
                 elif record['MARKET_COMPETITORS']==2:
                     base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
                     transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(Mnew/Mold)*base[3] if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+                    coef_cats = [1] + [2 if i==freq_ind else 3 for i in range(1,3)] + [4 if i==freq_ind else 5 for i in range(1,3)] + [6]
+                    
                 elif record['MARKET_COMPETITORS']==3:
                     base=[-150395.5496,-10106.6470,13135.9798,13136.1506,264.4822,-376.1793,-376.1781,270.2080,270.1927,-260.0113]
                     transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,4)] + [-(Mnew/Mold)*base[4] if i==freq_ind else -(Mnew/Mold)*base[5] for i in range(1,4)]
+                    coef_cats = [1] + [2 if i==freq_ind else 3 for i in range(1,4)] + [4 if i==freq_ind else 5 for i in range(1,4)]
                     if freq_ind ==1:
                         transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9]]
+                        coef_cats += [6,6,7]
                     elif freq_ind == 2:
                         transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7]]
+                        coef_cats += [6,7,6]
                     elif freq_ind == 3:
                         transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7]]
+                        coef_cats += [7,6,6]
                 elif record['MARKET_COMPETITORS']==4:
                     base=[-101456.3779,-5039.0076,6450.0318,6450.0511,6450.0624,134.9756,-137.7129,-137.7135,-137.7157,169.9196,169.9198,169.9212,-126.7018,-126.7025,-126.7034]    
                     transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,5)] + [-(Mnew/Mold)*base[5] if i==freq_ind else -(Mnew/Mold)*base[6] for i in range(1,5)]
+                    coef_cats= [100,100,100]
                     if freq_ind ==1:
                         transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[12]]
                     elif freq_ind == 2:
@@ -520,7 +529,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
                     print('ERROR: UNEXPECTED COMPETITORS >4')
                     return None
                 #save coeifficient data to seperate table
-                coefficient_table_rows.append( {'carrier':record['UNIQUE_CARRIER'],'bimarket':record['BI_MARKET'],'competitors':record['MARKET_COMPETITORS'],'rank':record['MARKET_RANK'],'coefs':transcoef})
+                coefficient_table_rows.append( {'carrier':record['UNIQUE_CARRIER'],'bimarket':record['BI_MARKET'],'competitors':record['MARKET_COMPETITORS'],'rank':record['MARKET_RANK'],'coefs':transcoef, 'coef_cats':coef_cats})
                 #add vector to full stacked coefficient vector
                 carrier_coef += transcoef 
         
@@ -543,7 +552,88 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
     coef_df = pd.DataFrame(coefficient_table_rows)   
     coef_df.to_csv('transcoef_table.csv',sep=';')
     return coef_df
+    
+    
+    
+'''
+function to divide coef_df from network game function into 3player, hub, 1player and other 2 player categories
+'''
+def experiment_categories_1(row):
+    #create list of double-hubs for carriers
+    hub_sets = {'WN':['LAX','OAK','PHX','SAN','LAS'],'US':['LAS','PHX'],'UA':['LAX','SFO'],'AS':['SEA','PDX','LAX']}
+    hub_groups = []    
+    for carrier, hubs in hub_sets.items():
+        pairs =[sorted([pair[0],pair[1]]) for pair in product(hubs,hubs) if pair[0]!=pair[1] ]
+        txtpairs = list(set(["_".join(pair) for pair in pairs]))
+        carrier_hubs = [carrier + '_' + txtpair for txtpair in txtpairs ]
+        hub_groups += carrier_hubs       
+            
+    #first check if 3 player, assign to category
+    if int(row['competitors']) ==3:
+        cat = 1
+    elif row['carrier']+'_' +row['bimarket'] in hub_groups:
+        cat = 2
+    elif int(row['competitors']) ==1:
+        cat = 4
+    else:
+        cat = 3
+    return cat
+    
+    
+def create_exp_files():  
+    coef_df = pd.read_csv('transcoef_table.csv',sep=';')
+    #coef_df is in order of carriers/coefficient vectors used to create file already
+    coef_df['category'] = coef_df.apply(experiment_categories_1,1)        
+    category_inds = [list(range(1,8)),list(range(1,7)),list(range(1,7)),list(range(1,4))]
 
+    t100ranked_fn = "nonstop_competitive_markets.csv"
+    t100ranked = pd.read_csv(t100ranked_fn)
+    carriers_sorted = sorted(list(set(t100ranked['UNIQUE_CARRIER'].tolist())))
+    file_ind = 0 #index for which file we are on
+    #loop through each carrier-market category
+    for category in range(1,5):
+        coef_ind = 0 #coefficient increment, goes to 21
+        for coef_number in category_inds[category-1]: #which coefficient to modify
+            coef_ind += 1
+            #how much to modify it by
+            for modification_factor in [round(-.5+.1*i,1) for i in range(0,11)]:
+                #read from base file, write to new outfile
+                with open('carrier_data.txt','r') as basefile, open('carrier_data_%s_%s.txt' % (str(coef_ind),str(modification_factor)),'w') as outfile:
+                    file_ind+=1 #increment file index
+                    print("FILE %s" % file_ind)
+                    for i,line in enumerate(basefile):
+                        if i<4: #first three lines just copy
+                            outfile.write(line)
+                        else: #make files
+                            splitline = line.strip().split()
+                            for carrier in carriers_sorted:
+                                carrier_group = coef_df[coef_df['carrier']==carrier]
+                                #full new coefficient vector
+                                new_coefs = [] 
+                                #modify coefficients
+                                for coef_row in carrier_group.to_dict('records'):
+                                    #if category being modified, modify coefficients relevant to coef  number
+                                    if coef_row['category']==category:
+                                        if category == 4: #if just 1 carrier, modify appropriate coefficient
+                                            mod_coefs = coef_row['coefs']
+                                            mod_coefs[coef_number-1] +=  modification_factor*mod_coefs[coef_number-1]
+                                        else: #modify coefficients that match current coefficient number
+                                            mod_coefs = coef_row['coefs']
+                                            coef_cats = coef_row['coef_cats']
+                                            mod_coefs = [(B + modification_factor*B if ind==coef_number else B) for B,ind in zip(mod_coefs,coef_cats )]
+                                    else:# keep the same if not the current category being modified
+                                        mod_coefs = coef_row['coefs']
+                                    if file_ind == 1:
+                                        print(carrier)
+                                        print(coef_row['coefs'])
+                                        print(mod_coefs)
+                                    #add potentially modified coefficients to new vector
+                                    new_coefs += mod_coefs
+                            splitline[-1] = "["+",".join([str(num) for num in new_coefs])+"]"
+                            newline = "\t".join(splitline) + "\n"
+                            outfile.write(newline)
+    return "done"        
+             
 '''
 function to build easily read data table from MATLAB output
 '''
@@ -600,5 +690,10 @@ def create_results_table(outfile_fn='network_MAPE_revisedF2_inf.csv',input_fn = 
     network_results.to_csv(outfile_fn,sep='\t')
     return network_results
 
+
+
+'''
+NEED FUNCTION TO READ EACH OUTPUT FILE, CALCULATE FULL MAPE, PUT INTO TABLE, USING FUNCTION ABOVE, WHICH WILL NEED TO BE MODIFIED TO HAVE OVERALL MAPE
+'''
 
 
