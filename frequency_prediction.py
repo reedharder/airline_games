@@ -58,7 +58,7 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",aotp_
     #get aotp to get flight times
     aotp_mar = pd.read_csv(aotp_fn)
     aotp_mar['BI_MARKET']=aotp_mar.apply(create_market,1) 
-    #DISSAGREGGATE BY AIRCRAFT TYPE LATER
+    #DISSAGREGGATE BY AIRCRAFT TYPE LATER, NOTE: POSSIBILITY OF CANCELED ZERO HOUR FLIGHTS?
     aotp_mar_times = aotp_mar[['UNIQUE_CARRIER','BI_MARKET','AIR_TIME']].groupby(['UNIQUE_CARRIER','BI_MARKET']).aggregate(lambda x: np.mean(x)/60)
     aotp_mar_times = aotp_mar_times.reset_index().groupby(['UNIQUE_CARRIER','BI_MARKET'])    
     
@@ -72,7 +72,8 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",aotp_
 
     #average relevant monthly frequencie to get daily freqencies
     t100fields =['BI_MARKET','UNIQUE_CARRIER','ORIGIN', 'DEST','AIRCRAFT_TYPE','DEPARTURES_SCHEDULED','DEPARTURES_PERFORMED','SEATS','PASSENGERS','DISTANCE','AIR_TIME']
-    t100_summed = relevant_t100[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET','ORIGIN','DEST','AIRCRAFT_TYPE']).aggregate({'DEPARTURES_SCHEDULED':lambda x: np.sum(x),'SEATS':lambda x: np.sum(x)/(365/(4/len(quarters))),'PASSENGERS':lambda x: np.sum(x)/(365/(4/len(quarters))),'DISTANCE':np.mean,'AIR_TIME': np.mean}).reset_index()
+    #daily departures, seats, passengers, avg distance, total airtime
+    t100_summed = relevant_t100[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET','ORIGIN','DEST','AIRCRAFT_TYPE']).aggregate({'DEPARTURES_SCHEDULED':lambda x: np.sum(x),'DEPARTURES_PERFORMED':lambda x: np.sum(x),'SEATS':lambda x: np.sum(x)/(365/(4/len(quarters))),'PASSENGERS':lambda x: np.sum(x)/(365/(4/len(quarters))),'DISTANCE':np.mean,'AIR_TIME':lambda x: np.sum(x)}).reset_index()
     #convert airtime to hours
     t100_summed['AIR_HOURS']=(t100_summed['AIR_TIME']/60)
     t100_summed['FLIGHT_TIME']=t100_summed['AIR_HOURS']/t100_summed['DEPARTURES_PERFORMED']
@@ -92,7 +93,7 @@ def nonstop_market_profile(output_file = "nonstop_competitive_markets.csv",aotp_
     #average flight cost between different types  
     t100fields =['BI_MARKET','ORIGIN','DEST','UNIQUE_CARRIER','AIRCRAFT_TYPE','DEPARTURES_SCHEDULED','SEATS','PASSENGERS','DISTANCE', 'DAILY_FREQ','FLIGHT_COST','FLIGHT_TIME','AIR_HOURS']
     t100_summed_avgs = t100_summed[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET']).apply(avg_costs)
-    t100_craft_avg = t100_summed_avgs[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET','ORIGIN','DEST']).aggregate({'DEPARTURES_SCHEDULED':np.sum,'SEATS':np.sum,'PASSENGERS':np.sum,'DISTANCE':np.mean, 'DAILY_FREQ':np.sum,'FLIGHT_COST':np.mean,'FLIGHT_TIME':np.mean,'AIR_HOURS':np.mean}).reset_index()
+    t100_craft_avg = t100_summed_avgs[t100fields].groupby(['UNIQUE_CARRIER','BI_MARKET','ORIGIN','DEST']).aggregate({'DEPARTURES_SCHEDULED':np.sum,'SEATS':np.sum,'PASSENGERS':np.sum,'DISTANCE':np.mean, 'DAILY_FREQ':np.sum,'FLIGHT_COST':np.mean,'FLIGHT_TIME':np.mean,'AIR_HOURS':np.sum}).reset_index()
     #textfile of t100 summed over months, to check passenger equivalence between market directions
     t100_craft_avg.to_csv("t100_craft_avg.csv")
     #average values between segments sharing a bidirectional market 
@@ -382,7 +383,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
     aotp_mar_times = aotp_mar[['UNIQUE_CARRIER','BI_MARKET','AIR_TIME']].groupby(['UNIQUE_CARRIER','BI_MARKET']).aggregate(lambda x: np.mean(x)/60)
     aotp_mar_times = aotp_mar_times.reset_index().groupby(['UNIQUE_CARRIER','BI_MARKET'])
     #create input file for MATLAB based myopic best response network game
-    with open('carrier_data.txt','w') as outfile:
+    with open('carrier_data.txt','w') as outfile:       
         # group competitive markets table by market
         t100_gb_market = t100ranked.groupby('BI_MARKET')
         #get set of markets
@@ -410,7 +411,9 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
         #loop through carriers, for each line, write A matrix for optimization inequality constraints, corresponding b vector, indices
         #of markets that carrier is in , index of that carriers frequency within that market (in market frequency data structure to be created 
         #in MATLAB, and concatenated profit coefficient vectors in order of sorted market)
+        coefficient_table_rows = [] #initialize coef table
         for i, carrier in enumerate(carriers_sorted):
+            print(carrier)
             #get data related to  current carrier from t100ranked, sorted in order of market and then carrier rank in market
             carrier_data = t100ranked[t100ranked['UNIQUE_CARRIER']==carrier]
             carrier_markets_str = carrier_data['BI_MARKET'].tolist() #markets under consideration
@@ -461,6 +464,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
             carrier_freq_ind = carrier_data['MARKET_RANK'].tolist()
             #get coefficients, stacked in order of markets
             carrier_coef = []
+            
             for record in carrier_data.to_dict('records'):
                 #parameters for transformation from base coefficients to coefficients reflecting particular costs and market sizes
                 #old and new costs
@@ -472,6 +476,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
                 #frequency index of carrier in market to determine order of coefficients
                 freq_ind = record['MARKET_RANK']
                 #create coefficients based on how many competitors in market
+                '''
                 if record['MARKET_COMPETITORS']==1:
                     base = [-95164.0447,-36238.3083,1148.0305]
                     transcoef = [-(Mnew/Mold)*base[0],(Mnew/Mold)*(Cold-base[1])-Cnew,-(Mnew/Mold)*base[2] ]
@@ -484,9 +489,41 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
                 else:
                     base=[-101456.3779,-5039.0076,6450.0318,6450.0511,6450.0624,134.9756,-137.7129,-137.7135,-137.7157,169.9196,169.9198,169.9212,-126.7018,-126.7025,-126.7034]    
                     transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[j])-Cnew if (i+1)==freq_ind else -(Mnew/Mold)*base[j] for i,j in enumerate(range(1,5))  ] + [-(Mnew/Mold)*base[i] for i in range(5,15)]
+                '''
+                if record['MARKET_COMPETITORS']==1:
+                    base = [-95164.0447,-36238.3083,1148.0305]
+                    transcoef = [-(Mnew/Mold)*base[0],(Mnew/Mold)*(Cold-base[1])-Cnew,-(Mnew/Mold)*base[2] ]
+                elif record['MARKET_COMPETITORS']==2:
+                    base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+                    transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(Mnew/Mold)*base[3] if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+                elif record['MARKET_COMPETITORS']==3:
+                    base=[-150395.5496,-10106.6470,13135.9798,13136.1506,264.4822,-376.1793,-376.1781,270.2080,270.1927,-260.0113]
+                    transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,4)] + [-(Mnew/Mold)*base[4] if i==freq_ind else -(Mnew/Mold)*base[5] for i in range(1,4)]
+                    if freq_ind ==1:
+                        transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9]]
+                    elif freq_ind == 2:
+                        transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7]]
+                    elif freq_ind == 3:
+                        transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7]]
+                elif record['MARKET_COMPETITORS']==4:
+                    base=[-101456.3779,-5039.0076,6450.0318,6450.0511,6450.0624,134.9756,-137.7129,-137.7135,-137.7157,169.9196,169.9198,169.9212,-126.7018,-126.7025,-126.7034]    
+                    transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,5)] + [-(Mnew/Mold)*base[5] if i==freq_ind else -(Mnew/Mold)*base[6] for i in range(1,5)]
+                    if freq_ind ==1:
+                        transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[12]]
+                    elif freq_ind == 2:
+                        transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[12]]
+                    elif freq_ind == 3:
+                        transcoef += [-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[9]]
+                    elif freq_ind == 4:
+                        transcoef += [-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[12],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[9],]
+                else:
+                    print('ERROR: UNEXPECTED COMPETITORS >4')
+                    return None
+                #save coeifficient data to seperate table
+                coefficient_table_rows.append( {'carrier':record['UNIQUE_CARRIER'],'bimarket':record['BI_MARKET'],'competitors':record['MARKET_COMPETITORS'],'rank':record['MARKET_RANK'],'coefs':transcoef})
                 #add vector to full stacked coefficient vector
                 carrier_coef += transcoef 
-            #construct rowstring, using MATLAB vector notation for each componentf
+        
             row_string = '['
             for a_row in A_rows:
                 row_string+=",".join([str(num) for num in a_row])
@@ -502,7 +539,10 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
             row_string+=']'+'\n'
             #write to outfile
             outfile.write(row_string)
-    return None
+    #construct rowstring, using MATLAB vector notation for each componentf
+    coef_df = pd.DataFrame(coefficient_table_rows)   
+    coef_df.to_csv('transcoef_table.csv',sep=';')
+    return coef_df
 
 '''
 function to build easily read data table from MATLAB output

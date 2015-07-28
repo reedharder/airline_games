@@ -5,7 +5,7 @@ Y1=fvals_1p(:,5);
 mdl1=fitlm(X1,Y1)
 coef1=mdl1.Coefficients.Estimate;
 display('1 player done')
-%two player regression
+%three player regression
 alpha=fvals3(:,1);
 beta=fvals3(:,2);
 f1=fvals3(:,3);
