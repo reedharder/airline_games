@@ -2,7 +2,7 @@ cd('C:/Users/Reed/Desktop/vaze_competition_paper/matlab_2stagegames')
 fid = fopen('carrier_data.txt','r');
 %carrier fixing 
             %['AA','AS','MQ','OO','QX','UA','US','WN']
-fixed_carrier = [0   0    1    1    1    0    0    0];
+fixed_carrier = [1   0    1    1    1    0    0    0];
 
 %optimization options
 options = optimset('Display', 'off') ;
@@ -93,8 +93,8 @@ while (sum(diffs(fixed_carrier == 0)>eps)>0) %loop until converges (just for non
             %set up profit function for this carrier
             profit_func=@(f_i)profit_stage1_network(f_i,carrier.coef, carrier.freq_inds,carrier.Markets,current_markets);
             %optimize frequencies of this carrier for profit
-            %[x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
-            [x_i, profit]=fmincon(profit_func,f_i,[],[],[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
+            [x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
+            %[x_i, profit]=fmincon(profit_func,f_i,[],[],[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
             sprintf('carrier: %d',carrier_ind)
             display(x_i)
             %check for convergence
@@ -144,5 +144,5 @@ for mk=1:numel(segment_competitors)
     end
     row_ind = row_ind+segment_competitors(mk);
 end
-dlmwrite('network_results_reTEST.csv',freq_results_mat,'delimiter',',','precision','%.4f')
+dlmwrite('network_results_reTEST_AA.csv',freq_results_mat,'delimiter',',','precision','%.4f')
 

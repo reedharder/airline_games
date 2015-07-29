@@ -10,6 +10,7 @@ import os
 import numpy as np
 import pandas as pd
 from itertools import product
+import ast
 #LOAD NEW KIND OF T100 file 
 
 '''
@@ -559,6 +560,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
 function to divide coef_df from network game function into 3player, hub, 1player and other 2 player categories
 '''
 def experiment_categories_1(row):
+    
     #create list of double-hubs for carriers
     hub_sets = {'WN':['LAX','OAK','PHX','SAN','LAS'],'US':['LAS','PHX'],'UA':['LAX','SFO'],'AS':['SEA','PDX','LAX']}
     hub_groups = []    
@@ -590,9 +592,9 @@ def create_exp_files():
     t100ranked = pd.read_csv(t100ranked_fn)
     carriers_sorted = sorted(list(set(t100ranked['UNIQUE_CARRIER'].tolist())))
     file_ind = 0 #index for which file we are on
-    #loop through each carrier-market category
-    for category in range(1,5):
-        coef_ind = 0 #coefficient increment, goes to 21
+    #loop through each carrier-market category 
+    coef_ind = 0 #coefficient increment, goes to 22
+    for category in range(1,5):       
         for coef_number in category_inds[category-1]: #which coefficient to modify
             coef_ind += 1
             #how much to modify it by
@@ -600,35 +602,39 @@ def create_exp_files():
                 #read from base file, write to new outfile
                 with open('carrier_data.txt','r') as basefile, open('carrier_data_%s_%s.txt' % (str(coef_ind),str(modification_factor)),'w') as outfile:
                     file_ind+=1 #increment file index
-                    print("FILE %s" % file_ind)
+                    if file_ind % 50 == 0 :
+                        print("FILE %s" % file_ind)
                     for i,line in enumerate(basefile):
                         if i<4: #first three lines just copy
                             outfile.write(line)
                         else: #make files
                             splitline = line.strip().split()
-                            for carrier in carriers_sorted:
-                                carrier_group = coef_df[coef_df['carrier']==carrier]
-                                #full new coefficient vector
-                                new_coefs = [] 
-                                #modify coefficients
-                                for coef_row in carrier_group.to_dict('records'):
-                                    #if category being modified, modify coefficients relevant to coef  number
-                                    if coef_row['category']==category:
-                                        if category == 4: #if just 1 carrier, modify appropriate coefficient
-                                            mod_coefs = coef_row['coefs']
-                                            mod_coefs[coef_number-1] +=  modification_factor*mod_coefs[coef_number-1]
-                                        else: #modify coefficients that match current coefficient number
-                                            mod_coefs = coef_row['coefs']
-                                            coef_cats = coef_row['coef_cats']
-                                            mod_coefs = [(B + modification_factor*B if ind==coef_number else B) for B,ind in zip(mod_coefs,coef_cats )]
-                                    else:# keep the same if not the current category being modified
-                                        mod_coefs = coef_row['coefs']
-                                    if file_ind == 1:
-                                        print(carrier)
-                                        print(coef_row['coefs'])
-                                        print(mod_coefs)
-                                    #add potentially modified coefficients to new vector
-                                    new_coefs += mod_coefs
+                            #for carrier in carriers_sorted: NO
+                            carrier=carriers_sorted[i-4]
+                            carrier_group = coef_df[coef_df['carrier']==carrier]
+                            #full new coefficient vector
+                            new_coefs = [] 
+                            #modify coefficients
+                            for coef_row in carrier_group.to_dict('records'):
+                                #if category being modified, modify coefficients relevant to coef  number
+                                if coef_row['category']==category:
+                                    if category == 4: #if just 1 carrier, modify appropriate coefficient
+                                        mod_coefs = ast.literal_eval(coef_row['coefs'])
+                                        mod_coefs[coef_number-1] +=  modification_factor*mod_coefs[coef_number-1]
+                                    else: #modify coefficients that match current coefficient number
+                                        mod_coefs = ast.literal_eval(coef_row['coefs'])
+                                        coef_cats = ast.literal_eval(coef_row['coef_cats'])
+                                        mod_coefs = [(B + modification_factor*B if ind==coef_number else B) for B,ind in zip(mod_coefs,coef_cats )]
+                                else:# keep the same if not the current category being modified
+                                    mod_coefs =  ast.literal_eval(coef_row['coefs'])
+                                if file_ind == 100:
+                                    print(carrier)
+                                    print('mf: %s, coef num: %s, category: %s' % (modification_factor,coef_number,category))
+                                    print(coef_cats)
+                                    print(coef_row['coefs'])
+                                    print(mod_coefs)
+                                #add potentially modified coefficients to new vector
+                                new_coefs += mod_coefs
                             splitline[-1] = "["+",".join([str(num) for num in new_coefs])+"]"
                             newline = "\t".join(splitline) + "\n"
                             outfile.write(newline)
@@ -693,7 +699,72 @@ def create_results_table(outfile_fn='network_MAPE_revisedF2_inf.csv',input_fn = 
 
 
 '''
+function to read outpur files, analyze, calculate overall MAPE
 NEED FUNCTION TO READ EACH OUTPUT FILE, CALCULATE FULL MAPE, PUT INTO TABLE, USING FUNCTION ABOVE, WHICH WILL NEED TO BE MODIFIED TO HAVE OVERALL MAPE
+ADD OVERALL MAPE TO ABOVE FUNCTION SO THAT IT CAN BE USED IN A LOOP INSTEAD OF UGLY FUNCTION BELOW
 '''
-
+def experimental_results_table(outfile_fn='experimental_table.csv',t100ranked_fn = "nonstop_competitive_markets.csv"):
+    end_coef = 8
+    resTABLE = pd.DataFrame(index=list(range(1,end_coef)),columns=[round(-.5+.1*i,1) for i in range(0,11)])    
+    for i in range(1,end_coef):
+        for modification_factor in [round(-.5+.1*i,1) for i in range(0,11)]:
+            input_fn = "matlab_2stagegames/exp_results_%s_%s.txt" % (i,modification_factor)
+            #read in original market profile file    
+            t100ranked  = pd.read_csv(t100ranked_fn) 
+            #use subset of this as base for results table
+            network_results_raw = pd.read_csv(input_fn,header=None)
+            network_results = t100ranked[['UNIQUE_CARRIER','BI_MARKET','MARKET_RANK','MARKET_COMPETITORS','DAILY_FREQ']]
+            # add estimated frequency column from MATLAB results
+            network_results['EST_FREQ'] = network_results_raw[2].tolist()
+            #group results by market
+            results_market_grouped =network_results.groupby('BI_MARKET')    
+            t100_gb_market = t100ranked.groupby('BI_MARKET')
+            #extract markets in alphabetical order
+            markets_sorted = sorted(list(set(t100ranked['BI_MARKET'].tolist())))
+            #get number of competitors in all these markets
+            mkt_sizes = [str(t100_gb_market.get_group(mkt)['MARKET_COMPETITORS'].iloc[0]) for mkt in markets_sorted]
+            #compute market-wise MAPE    
+            MAPES=[]
+            for mkt in markets_sorted:
+                mkt_gb = results_market_grouped.get_group(mkt)
+                fs = mkt_gb['DAILY_FREQ'].tolist()
+                f_hats = mkt_gb['EST_FREQ'].tolist()
+                mape = sum([abs(f_hat-f) for f_hat,f in zip(f_hats,fs)])/sum(fs)
+                MAPES.append(mape)
+            #append this calculation to network results table (repeated where market is same)
+            mape_column = []
+            for competitors, mape in zip(mkt_sizes, MAPES):
+                mape_column += np.repeat(mape,int(competitors)).tolist()
+            network_results['MAPE'] = mape_column
+            #add individual Error column
+            network_results['Error']= abs(network_results['DAILY_FREQ']-network_results['EST_FREQ'])/network_results['DAILY_FREQ']
+            #compute carrier-wise MAPE
+            carriers_sorted = sorted(list(set(t100ranked['UNIQUE_CARRIER'].tolist())))
+            results_carrier_grouped =network_results.groupby('UNIQUE_CARRIER')
+            network_results = network_results.sort(columns=['UNIQUE_CARRIER','BI_MARKET'])
+            CARRIER_MAPES=[]    
+            num_mkts =  [] #corresponding list of number of markets per carrier
+            for cr in carriers_sorted:
+                crt_gb = results_carrier_grouped.get_group(cr)
+                fs = crt_gb['DAILY_FREQ'].tolist()
+                f_hats = crt_gb['EST_FREQ'].tolist()
+                mape = sum([abs(f_hat-f) for f_hat,f in zip(f_hats,fs)])/sum(fs)
+                CARRIER_MAPES.append(mape)
+                num_mkts.append(crt_gb.shape[0])
+            #append this calculation to network results table (repeated where carrier is same)
+            crmape_column = []    
+            for mkts, mape in zip(num_mkts, CARRIER_MAPES):
+                crmape_column += np.repeat(mape,int(mkts)).tolist()
+            network_results['CR_MAPE'] = crmape_column
+            #resort dataframe and save to file
+            network_results = network_results.sort(columns=['BI_MARKET','MARKET_RANK']) 
+            network_results.to_csv('net_results_%s_%s.txt' % (i,modification_factor))
+            #calculate overall MAPE                       
+            reduced_net = network_results.set_index('UNIQUE_CARRIER').loc[['AS','UA','US','WN']] 
+            fs = reduced_net['DAILY_FREQ'].tolist()
+            f_hats = reduced_net['EST_FREQ'].tolist()
+            overall_MAPE = sum([abs(f_hat-f) for f_hat,f in zip(f_hats,fs)])/sum(fs)            
+            resTABLE.loc[i,modification_factor]=overall_MAPE
+    resTABLE.to_csv('exp_results_table.csv')
+    return resTABLE
 
