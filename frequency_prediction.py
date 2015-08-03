@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from itertools import product
 import ast
+os.chdir("C:/Users/Reed/Desktop/vaze_competition_paper")
 #LOAD NEW KIND OF T100 file 
 
 '''
@@ -559,8 +560,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
 '''
 function to divide coef_df from network game function into 3player, hub, 1player and other 2 player categories
 '''
-def experiment_categories_1(row):
-    
+def experiment_categories_1(row):    
     #create list of double-hubs for carriers
     hub_sets = {'WN':['LAX','OAK','PHX','SAN','LAS'],'US':['LAS','PHX'],'UA':['LAX','SFO'],'AS':['SEA','PDX','LAX']}
     hub_groups = []    
@@ -691,6 +691,9 @@ def create_results_table(outfile_fn='network_MAPE_revisedF2_inf.csv',input_fn = 
     for mkts, mape in zip(num_mkts, CARRIER_MAPES):
         crmape_column += np.repeat(mape,int(mkts)).tolist()
     network_results['CR_MAPE'] = crmape_column
+    network_results['CATEGORY'] = network_results.apply(experiment_categories_2,1)   
+    network_results['ABS_DIFF'] = abs(network_results['DAILY_FREQ']-network_results['EST_FREQ'])
+    network_results['DIFF'] = network_results['DAILY_FREQ']-network_results['EST_FREQ']
     #resort dataframe and save to file
     network_results = network_results.sort(columns=['BI_MARKET','MARKET_RANK'])
     network_results.to_csv(outfile_fn,sep='\t')
@@ -703,11 +706,11 @@ function to read outpur files, analyze, calculate overall MAPE
 NEED FUNCTION TO READ EACH OUTPUT FILE, CALCULATE FULL MAPE, PUT INTO TABLE, USING FUNCTION ABOVE, WHICH WILL NEED TO BE MODIFIED TO HAVE OVERALL MAPE
 ADD OVERALL MAPE TO ABOVE FUNCTION SO THAT IT CAN BE USED IN A LOOP INSTEAD OF UGLY FUNCTION BELOW
 '''
-def experimental_results_table(outfile_fn='experimental_table.csv',t100ranked_fn = "nonstop_competitive_markets.csv"):
-    end_coef = 8
+def experimental_results_table(outfile_fn='experimental_table_numel.csv',t100ranked_fn = "nonstop_competitive_markets.csv"):
+    end_coef = 23
     resTABLE = pd.DataFrame(index=list(range(1,end_coef)),columns=[round(-.5+.1*i,1) for i in range(0,11)])    
     for i in range(1,end_coef):
-        for modification_factor in [round(-.5+.1*i,1) for i in range(0,11)]:
+        for modification_factor in [round(-.5,1),round(-.2,1),round(.2,1),round(.5,1)]:#[round(-.5+.1*j,1) for j in range(0,11)]:
             input_fn = "matlab_2stagegames/exp_results_%s_%s.txt" % (i,modification_factor)
             #read in original market profile file    
             t100ranked  = pd.read_csv(t100ranked_fn) 
@@ -767,4 +770,25 @@ def experimental_results_table(outfile_fn='experimental_table.csv',t100ranked_fn
             resTABLE.loc[i,modification_factor]=overall_MAPE
     resTABLE.to_csv('exp_results_table.csv')
     return resTABLE
+    
+def experiment_categories_2(row):    
+    #create list of double-hubs for carriers
+    hub_sets = {'WN':['LAX','OAK','PHX','SAN','LAS'],'US':['LAS','PHX'],'UA':['LAX','SFO'],'AS':['SEA','PDX','LAX']}
+    hub_groups = []    
+    for carrier, hubs in hub_sets.items():
+        pairs =[sorted([pair[0],pair[1]]) for pair in product(hubs,hubs) if pair[0]!=pair[1] ]
+        txtpairs = list(set(["_".join(pair) for pair in pairs]))
+        carrier_hubs = [carrier + '_' + txtpair for txtpair in txtpairs ]
+        hub_groups += carrier_hubs       
+            
+    #first check if 3 player, assign to category
+    if int(row['MARKET_COMPETITORS']) ==3:
+        cat = 1
+    elif row['UNIQUE_CARRIER']+'_' +row['BI_MARKET'] in hub_groups:
+        cat = 2
+    elif int(row['MARKET_COMPETITORS']) ==1:
+        cat = 4
+    else:
+        cat = 3
+    return cat
 

@@ -2,7 +2,7 @@ cd('C:/Users/Reed/Desktop/vaze_competition_paper/matlab_2stagegames')
 fid = fopen('carrier_data.txt','r');
 %carrier fixing 
             %['AA','AS','MQ','OO','QX','UA','US','WN']
-fixed_carrier = [1   0    1    1    1    0    0    0];
+fixed_carrier = [1   0    1    1    1    1    1    1];
 
 %optimization options
 options = optimset('Display', 'off') ;
@@ -47,7 +47,7 @@ while ischar(tline)
 end
 fclose(fid);
 
-eps=0.01;
+eps=0.1;
 diffs = ones(num_carriers,1) +eps;
 %initialize markets array, constaining frequencies of carriers competing in
 %that market
@@ -144,5 +144,7 @@ for mk=1:numel(segment_competitors)
     end
     row_ind = row_ind+segment_competitors(mk);
 end
-dlmwrite('network_results_reTEST_AA.csv',freq_results_mat,'delimiter',',','precision','%.4f')
+dlmwrite('network_results_numelAS.csv',freq_results_mat,'delimiter',',','precision','%.4f')
+
+%
 

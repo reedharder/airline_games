@@ -1,3 +1,20 @@
+%coef check
+c=[229325.30312328768, 14434.064090708493, -29137.724723287673, -354.96380931506854, 1084.2409589041097, -496.8325686301371];
+c2 = [229325.30312328768, -29137.724723287673, 15078.017400543913, 1084.2409589041097, -354.96380931506854, -496.8325686301371];
+
+f = 1:.1:30;
+f2=3.9;
+freqs = [ones(numel(f),1),f',ones(numel(f),1)*f2,f'.^2,(ones(numel(f),1)*f2).^2,f'*f2]';
+prof=c*freqs;
+plot(f,prof)
+f_i=1;
+profit_func=@(f_i)profit_stage1_network(f_i,c,1,13,{[1,3.9]});
+%optimize frequencies of this carrier for profit
+%[x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
+[x_i, profit]=fmincon(profit_func,f_i,[],[],[],[],zeros(1,1),ones(1,1)*inf,[],options);
+
+
+
 %1 market 1 carrier
 %input: Cnew, Mnew, freq empiricial, subF, block hours
 fs= zeros(10,1);
