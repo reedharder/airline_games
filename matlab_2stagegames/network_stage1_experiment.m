@@ -9,13 +9,13 @@ fixed_carrier_mat = [1   0    1    1    1    1    1    1;
     1   1    1    1    1    1    0    1;
     1   1    1    1    1    1    1    0;];
 for fixed_carrier_ind=1:4
-    for coef_ind = 1:22
-        for modif =[-.5 -.4 -.3 -.2 -.1  0 .1 .2 .3 .4 .5]
+    for coef_ind = [2,4,6,15,17,19,24,26,28,37,39,41]
+        for modif =-1:.1:1%[-.5 -.4 -.3 -.2 -.1  0 .1 .2 .3 .4 .5]
 
             modstr = num2str(modif,'%.1f');
             progress = sprintf('%d_%s',coef_ind,modstr);
             display(progress)
-            fn_open = sprintf('carrier_data_%d_%s.txt',coef_ind,modstr);
+            fn_open = sprintf('carrier_data_WN_%d_%s.txt',coef_ind,modstr);
 
             fid = fopen(fn_open,'r');
             %carrier fixing 
@@ -162,13 +162,16 @@ for fixed_carrier_ind=1:4
                 end
                 row_ind = row_ind+segment_competitors(mk);
             end
-            fn_out = sprintf('exp_results_fixed%d_%d_%s.txt',fixed_carrier_ind,coef_ind,modstr);
+            fn_out = sprintf('exp_results_fixed_WNsep%d_%d_%s.txt',fixed_carrier_ind,coef_ind,modstr);
             dlmwrite(fn_out,freq_results_mat,'delimiter',',','precision','%.4f')
             display(loop)
         end
     end
-    toc
+    
 end
+toc
+display('PART1 DONE')
+
 
 
 %all fixed carriers, no bounds
@@ -178,14 +181,14 @@ fixed_carrier_mat = [1   0    1    1    1    1    1    1;
     1   1    1    1    1    0    1    1;
     1   1    1    1    1    1    0    1;
     1   1    1    1    1    1    1    0;];
-for fixed_carrier_ind=1:4
-    for coef_ind = 1:22
-        for modif =[-.5 -.4 -.3 -.2 -.1  0 .1 .2 .3 .4 .5]
+for fixed_carrier_ind=4 %1:4
+    for coef_ind = [26,28,37,39,41]%[2,4,6,15,17,19,24,26,28,37,39,41]
+        for modif =-1:.1:1
 
             modstr = num2str(modif,'%.1f');
             progress = sprintf('%d_%s',coef_ind,modstr);
             display(progress)
-            fn_open = sprintf('carrier_data_%d_%s.txt',coef_ind,modstr);
+            fn_open = sprintf('carrier_data_WN_%d_%s.txt',coef_ind,modstr);
 
             fid = fopen(fn_open,'r');
             %carrier fixing 
@@ -332,7 +335,7 @@ for fixed_carrier_ind=1:4
                 end
                 row_ind = row_ind+segment_competitors(mk);
             end
-            fn_out = sprintf('exp_results_fixed_nobounds%d_%d_%s.txt',fixed_carrier_ind,coef_ind,modstr);
+            fn_out = sprintf('exp_results_fixed_nobounds_WNsep%d_%d_%s.txt',fixed_carrier_ind,coef_ind,modstr);
             dlmwrite(fn_out,freq_results_mat,'delimiter',',','precision','%.4f')
             display(loop)
         end
@@ -341,12 +344,13 @@ for fixed_carrier_ind=1:4
 end
 toc
 
+display('PART2 DONE')
 
 %all experiments, full competition, no bounds
 
 cd('C:/Users/Reed/Desktop/vaze_competition_paper/matlab_2stagegames')
 tic
-for coef_ind = 1:22
+for coef_ind = 14:22
     for modif =[-.5 -.4 -.3 -.2 -.1 .1 .2 .3 .4 .5]
         
         modstr = num2str(modif,'%.1f');
@@ -448,8 +452,8 @@ for coef_ind = 1:22
                     %set up profit function for this carrier
                     profit_func=@(f_i)profit_stage1_network(f_i,carrier.coef, carrier.freq_inds,carrier.Markets,current_markets);
                     %optimize frequencies of this carrier for profit
-                    [x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
-                    %[x_i, profit]=fmincon(profit_func,f_i,[],[],[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
+                    %[x_i, profit]=fmincon(profit_func,f_i,carrier.A,carrier.b,[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
+                    [x_i, profit]=fmincon(profit_func,f_i,[],[],[],[],zeros(numel(carrier.Markets),1),ones(numel(carrier.Markets),1)*inf,[],options);
                     %%%%sprintf('carrier: %d',carrier_ind)
                     %%%%display(x_i)
                     %check for convergence
@@ -499,10 +503,11 @@ for coef_ind = 1:22
             end
             row_ind = row_ind+segment_competitors(mk);
         end
-        fn_out = sprintf('exp_results_nobounds%d_%s.txt',coef_ind,modstr);
+        fn_out = sprintf('exp_results_nobounds_%d_%s.txt',coef_ind,modstr);
         dlmwrite(fn_out,freq_results_mat,'delimiter',',','precision','%.4f')
         display(loop)
         
     end
 end
 toc
+display('PART3 DONE')
