@@ -62,7 +62,7 @@ for i,line in enumerate(route_demands.to_dict('records')):
         print(i)
     bimarket="_".join(sorted([line['ORIGIN'],line['DESTINATION']]))
     if line['NUM_FLIGHTS'] == 1:
-            nonstop_flight=True
+        nonstop_flight=True
     leg1="_".join(sorted([line['ORIGIN'],str(line['CONNECTION'])]))
     leg2="_".join(sorted([str(line['CONNECTION']),line['DESTINATION']]))
     if bimarket in txtpairs:        

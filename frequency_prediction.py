@@ -496,7 +496,7 @@ function to create table of carrier and market data used by matlab myopic best r
 if coef_WN is TRUE, WN is a seperate category for coefficient modification
 
 '''    
-def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.csv", fleet_lookup_fn = "fleet_lookup_marketdiv.csv",aotp_fn = 'aotp_march.csv',fleet_dist_aug_fn='aug_flet_mktDiv.csv'):   
+def create_network_game_datatable(t100ranked_fn = 'mkt_ratios.csv', fleet_lookup_fn = "fleet_lookup_marketdiv.csv",aotp_fn = 'aotp_march.csv',fleet_dist_aug_fn='aug_flet_mktDiv.csv'):   
     #read in data files     
     fleet_lookup= pd.read_csv(fleet_lookup_fn)
     aug_fleet = pd.read_csv(fleet_dist_aug_fn) 
@@ -508,7 +508,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
     aotp_mar_times = aotp_mar[['UNIQUE_CARRIER','BI_MARKET','AIR_TIME']].groupby(['UNIQUE_CARRIER','BI_MARKET']).aggregate(lambda x: np.mean(x)/60)
     aotp_mar_times = aotp_mar_times.reset_index().groupby(['UNIQUE_CARRIER','BI_MARKET'])
     #create input file for MATLAB based myopic best response network game
-    with open('carrier_data_mktDiv.txt','w') as outfile:       
+    with open('carrier_data_mktDiv_newM.txt','w') as outfile:       
         # group competitive markets table by market
         t100_gb_market = t100ranked.groupby('BI_MARKET')
         #get set of markets
@@ -598,7 +598,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
                 Cnew = record['FLIGHT_COST']
                 #old and new market sizes
                 Mold = 1000
-                Mnew = record['MARKET_TOT']
+                Mnew = record['new_market']
                 #frequency index of carrier in market to determine order of coefficients
                 freq_ind = record['MARKET_RANK']
                 #create coefficients based on how many competitors in market
@@ -672,7 +672,7 @@ def create_network_game_datatable(t100ranked_fn = "nonstop_competitive_markets.c
             outfile.write(row_string)
     #construct rowstring, using MATLAB vector notation for each componentf
     coef_df = pd.DataFrame(coefficient_table_rows)   
-    coef_df.to_csv('transcoef_table_mktDiv.csv',sep=';')
+    coef_df.to_csv('transcoef_table_mktDiv_newM.csv',sep=';')
     return coef_df
     
     
@@ -916,7 +916,7 @@ def create_exp_files_WN():
 '''
 function to build easily read data table from MATLAB output
 '''
-def create_results_table(outfile_fn='network_table_newF.csv',input_fn = "matlab_2stagegames/network_results_newF.csv",t100ranked_fn = "nonstop_competitive_markets.csv"):
+def create_results_table(outfile_fn='network_table_mktDiv_newM.csv',input_fn = "matlab_2stagegames/network_results_mktDiv_newM.csv",t100ranked_fn = "nonstop_competitive_markets.csv"):
     #read in original market profile file    
     t100ranked  = pd.read_csv(t100ranked_fn) 
     #use subset of this as base for results table
@@ -979,12 +979,12 @@ function to read outpur files, analyze, calculate overall MAPE
 NEED FUNCTION TO READ EACH OUTPUT FILE, CALCULATE FULL MAPE, PUT INTO TABLE, USING FUNCTION ABOVE, WHICH WILL NEED TO BE MODIFIED TO HAVE OVERALL MAPE
 ADD OVERALL MAPE TO ABOVE FUNCTION SO THAT IT CAN BE USED IN A LOOP INSTEAD OF UGLY FUNCTION BELOW
 '''
-def experimental_results_table(input_base = "exp_results_basemod_noWNmod_MktDiv",outfile_fn='experimental_table_basemod_noWNmod_MktDivEx2.csv',t100ranked_fn = "nonstop_competitive_markets.csv"):
+def experimental_results_table(input_base = "exp_results_basemod_WNmod_MktDiv",outfile_fn='experimental_table_basemod_WNmod_MktDiv.csv',t100ranked_fn = "nonstop_competitive_markets.csv"):
     
     #resTABLE = pd.DataFrame(index=list(range(1,end_coef)),columns=[round(-.5+.1*i,1) for i in range(0,11)])    
     resTABLE = pd.DataFrame(index=[2, 4, 6, 9, 11, 13, 15, 17, 19, 21, 22],columns=[round(-1.5+.1*j,1) for j in range(0,31)])
-    for i in [4]:# [2, 4, 6, 9, 11, 13, 15, 17, 19, 21, 22]:#range(1,end_coef):        
-        for modification_factor in [round(1.1+.1*j,1) for j in range(0,5)]: #[round(-.5+.1*j,1) for j in range(0,11)]:#[round(-.5,1),round(-.2,1),round(.2,1),round(.5,1)]:#[round(-.5+.1*j,1) for j in range(0,11)]:
+    for i in [2, 4, 6, 9, 11, 13, 15, 17, 19, 21, 22]:#range(1,end_coef):        
+        for modification_factor in [round(-.5+.1*j,1) for j in range(0,11)]: #[round(-.5+.1*j,1) for j in range(0,11)]:#[round(-.5,1),round(-.2,1),round(.2,1),round(.5,1)]:#[round(-.5+.1*j,1) for j in range(0,11)]:
             input_fn = "matlab_2stagegames/" + input_base + "%s_%s.txt" % (i,modification_factor)
             try:                
                 #read in original market profile file    
@@ -1036,7 +1036,7 @@ def experimental_results_table(input_base = "exp_results_basemod_noWNmod_MktDiv"
                 network_results['CR_MAPE'] = crmape_column
                 #resort dataframe and save to file
                 network_results = network_results.sort(columns=['BI_MARKET','MARKET_RANK']) 
-                network_results.to_csv('net_results_basemod_noWNmod_MktDiv%s_%s.txt' % (i,modification_factor))
+                network_results.to_csv('net_results_basemod_WNmod_MktDiv%s_%s.txt' % (i,modification_factor))
                 #calculate overall MAPE                       
                 reduced_net = network_results.set_index('UNIQUE_CARRIER').loc[['AS','UA','US','WN']] 
                 fs = reduced_net['DAILY_FREQ'].tolist()
@@ -1463,5 +1463,148 @@ def create_exp_files_modbase():
 
 
 def get_market_connection_modifiers():
+    market_table_fn= "nonstop_competitive_markets.csv"
+    t100ranked = pd.read_csv(market_table_fn)   
+    t100ranked['CARRIER_MARKET'] = t100ranked.apply(lambda row: row['UNIQUE_CARRIER'] + '_' + row['BI_MARKET'],1)
+    t100ranked['connection_demands'] = np.zeros((t100ranked.shape[0],1))
+    t100ranked = t100ranked.set_index('CARRIER_MARKET')
+    markets_sorted = sorted(list(set(t100ranked['BI_MARKET'].tolist())))   
+    nonstop_numbers = {mkt:0 for mkt in markets_sorted}
+    total_numbers={mkt:0 for mkt in markets_sorted}
+    ###carriers_sorted = sorted(list(set(t100ranked['UNIQUE_CARRIER'].tolist())))
+    market_dict={mkt: list(set(t100ranked.groupby('BI_MARKET').get_group(mkt)['UNIQUE_CARRIER'].tolist()).intersection(['AS','UA','US','WN'])) for mkt in markets_sorted}
+    route_demands = pd.read_csv('route_demand_Q1.csv')
+    def create_market(row):
+        market = [row['ORIGIN'], row['DESTINATION']]
+        market.sort()
+        return "_".join(market)
+    for i,line in enumerate(route_demands.to_dict('records')):       
+        if i%1000 ==0:
+            print(i)
+        bimarket="_".join(sorted([line['ORIGIN'],line['DESTINATION']]))
+        leg1 = "_".join(sorted([line['ORIGIN'],line['CONNECTION']])) if line['NUM_FLIGHTS']==2 else 'NULL'
+        leg2 = "_".join(sorted([line['CONNECTION'],line['DESTINATION']])) if line['NUM_FLIGHTS']==2 else 'NULL'
+        carrier1 =line['FIRST_OPERATING_CARRIER']
+        carrier2 =line['SECOND_OPERATING_CARRIER']
+        #if non-stop market passengers, add to 
+        if line['NUM_FLIGHTS']==1 and bimarket in market_dict and carrier1 in market_dict[bimarket]:
+            nonstop_numbers[bimarket] += line['PASSENGERS']
+            total_numbers[bimarket] +=line['PASSENGERS']
+        if line['NUM_FLIGHTS']==2 and leg1 in market_dict and carrier1 in market_dict[leg1]:
+            total_numbers[leg1] +=line['PASSENGERS']
+            t100ranked.loc[carrier1 + '_' + leg1,'connection_demands'] += line['PASSENGERS']
+        if line['NUM_FLIGHTS']==2 and leg2 in market_dict and carrier2 in market_dict[leg2]:
+            total_numbers[leg2] +=line['PASSENGERS']
+            t100ranked.loc[carrier2 + '_' + leg2,'connection_demands'] += line['PASSENGERS']
+    def market_adjust(row):
+        if row['UNIQUE_CARRIER'] in ['AS','UA','US','WN']:
+            ratio=(row['connection_demands'] + nonstop_numbers[row['BI_MARKET']])/total_numbers[row['BI_MARKET']]
+            mkt_adj = row['MARKET_TOT']*ratio
+        else:
+            ratio = -1
+            mkt_adj = row['MARKET_TOT']
+        return pd.Series({'adj_ratio': ratio, 'new_market': mkt_adj})
+    t100ranked[['adj_ratio','new_market']]=t100ranked.apply(market_adjust,1)
+    t100ranked.reset_index().to_csv('mkt_ratios.csv')
+    return t100ranked
+        
+            
+            
+#make this into a nice loop
+
+def test_marketsize():
+    #create coefficients, US and WN in LAS PHX
     
-    pass
+    #DAILY_FREQ	FLIGHT_COST	MARKET_TOT	MARKET_COMPETITORS	MARKET_RANK	MS_TOT	AOTP_FLIGHT_TIME	BACKFOURTH
+    US_LAS_PHX = [13.14794521,	2741.966489,	2893.984932,	2,	2,0.458567582,	0.753976102,	3.007952204];
+    WN_LAS_PHX=[18.09863014,	2471.672902,	2893.984932,	2,	1,	0.541432418,	0.755375861,	3.010751722];
+    #for WN...
+    Cold=10000;
+    Mold = 1000;
+    rows=[]    
+    for r in [0+i*.1 for i in range(0,11)]:
+        base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+        Cnew = WN_LAS_PHX[1]
+        Mnew = WN_LAS_PHX[2]
+        freq_ind = WN_LAS_PHX[4]
+        
+        print((r*Mnew + (1-r)))
+        transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(1/Mold)*base[3]*(r*Mnew + (1-r)) if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+        F = WN_LAS_PHX[0]*WN_LAS_PHX[-1]/18 
+        bf = WN_LAS_PHX[-1]
+        row= [US_LAS_PHX[0],freq_ind,F,bf] + transcoef
+        rows.append(row)
+    df_out=pd.DataFrame(rows)
+    df_out.to_csv('matlab_2stagegames/r_mod1.csv')
+    US_LAS_PHX=[3.22739726,	2904.198215,	1617.493151,	2,	2,	0.195259873,	0.798509485,	3.09701897]
+    WN_LAS_PHX=[13.55479452,	2477.744583,	1617.493151,	2,	1,	0.804740127,	0.79801444,	3.096028881]
+
+    #for WN...
+    Cold=10000;
+    Mold = 1000;
+    rows=[]    
+    for r in [0+i*.1 for i in range(0,11)]:
+        base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+        Cnew = WN_LAS_PHX[1]
+        Mnew = WN_LAS_PHX[2]
+        freq_ind = WN_LAS_PHX[4]
+        
+        print((r*Mnew + (1-r)))
+        transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(1/Mold)*base[3]*(r*Mnew + (1-r)) if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+        F = WN_LAS_PHX[0]*WN_LAS_PHX[-1]/18 
+        bf = WN_LAS_PHX[-1]
+        row= [US_LAS_PHX[0],freq_ind,F,bf] + transcoef
+        rows.append(row)
+    df_out=pd.DataFrame(rows)
+    df_out.to_csv('matlab_2stagegames/r_mod2.csv')
+    
+    
+    
+    US_LAS_PHX=[5.782191781,	3072.946756,	1630.075342,	2,	2	,0.361742251,	0.864029181,	3.228058361]
+    WN_LAS_PHX =[11.3890411,	2702.690296	,1630.075342	,2,	1	,0.638257749,	0.854954955,	3.20990991]
+    
+      #for WN...
+    Cold=10000;
+    Mold = 1000;
+    rows=[]    
+    for r in [0+i*.1 for i in range(0,11)]:
+        base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+        Cnew = WN_LAS_PHX[1]
+        Mnew = WN_LAS_PHX[2]
+        freq_ind = WN_LAS_PHX[4]
+        
+        print((r*Mnew + (1-r)))
+        transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(1/Mold)*base[3]*(r*Mnew + (1-r)) if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+        F = WN_LAS_PHX[0]*WN_LAS_PHX[-1]/18 
+        bf = WN_LAS_PHX[-1]
+        row= [US_LAS_PHX[0],freq_ind,F,bf] + transcoef
+        rows.append(row)
+    df_out=pd.DataFrame(rows)
+    df_out.to_csv('matlab_2stagegames/r_mod3.csv')   
+    
+    #ADDD IN 
+    
+   
+    US_LAS_PHX=[2.895890411,	3700.92247,	1068.210959,	2,	2	,0.248165541,	1.052,	3.604,]
+    WN_LAS_PHX=[8.378082192	,3288.872331	,1068.210959,	2	,1,	0.751834459,	1.036753856,	3.573507713]
+    
+
+     #for WN...
+    Cold=10000;
+    Mold = 1000;
+    rows=[]    
+    for r in [0+i*.1 for i in range(0,11)]:
+        base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
+        Cnew = WN_LAS_PHX[1]
+        Mnew = WN_LAS_PHX[2]
+        freq_ind = WN_LAS_PHX[4]
+        
+        print((r*Mnew + (1-r)))
+        transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(1/Mold)*base[3]*(r*Mnew + (1-r)) if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+        F = WN_LAS_PHX[0]*WN_LAS_PHX[-1]/18 
+        bf = WN_LAS_PHX[-1]
+        row= [US_LAS_PHX[0],freq_ind,F,bf] + transcoef
+        rows.append(row)
+    df_out=pd.DataFrame(rows)
+    df_out.to_csv('matlab_2stagegames/r_mod4.csv')        
+       '''     

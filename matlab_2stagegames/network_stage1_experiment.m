@@ -511,3 +511,21 @@ for coef_ind =[4, 6, 9, 11, 13, 15, 17, 19, 21, 22]%[2, 4, 6, 9, 11, 13, 15, 17,
 end
 toc
 display('PART3 DONE')
+
+a=1.9;
+c=20;
+A=100;
+alpha=.602;
+gamma=.101;
+for k=0:n-1
+    ak=a/(k+1+A)^alpha;
+    ck=c/(k+1)^gamma;
+    delta=2*round(rand(p,1))-1;
+    thetaplus=theta+ck*delta;
+    thetaminus=theta-ck*delta;
+    yplus=loss(thetaplus);
+    yminus=loss(thetaminus);
+    ghat=(yplus-yminus)./(2*ck*delta);
+    theta=theta-ak*ghat;
+end
+theta

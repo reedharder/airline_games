@@ -1,5 +1,5 @@
 cd('C:/Users/Reed/Desktop/vaze_competition_paper/matlab_2stagegames')
-fid = fopen('carrier_data_newF.txt','r');
+fid = fopen('carrier_data_mktDiv_newM.txt','r');
 %carrier fixing 
             %['AA','AS','MQ','OO','QX','UA','US','WN']
 fixed_carrier = [1   0    1    1    1    0    0    0];
@@ -144,7 +144,7 @@ for mk=1:numel(segment_competitors)
     end
     row_ind = row_ind+segment_competitors(mk);
 end
-dlmwrite('network_results_newF.csv',freq_results_mat,'delimiter',',','precision','%.4f')
+dlmwrite('network_results_mktDiv_newM.csv',freq_results_mat,'delimiter',',','precision','%.4f')
 
 %
 
