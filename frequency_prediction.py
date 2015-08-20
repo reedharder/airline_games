@@ -1470,7 +1470,7 @@ def create_exp_files_modbase():
 
 #create experimental carrier files with new F and premodified base    
 def create_exp_files_modmkt():  
-    carriers_to_modify = ['AS','UA','US','WN']
+    
     coef_df = pd.read_csv('transcoef_table_mktDiv.csv',sep=';')
     #coef_df is in order of carriers/coefficient vectors used to create file already
     coef_df['category'] = coef_df.apply(experiment_categories_1,1)        
@@ -1484,100 +1484,76 @@ def create_exp_files_modmkt():
     file_ind = 0 #index for which file we are on
     #loop through each carrier-market category 
     coef_ind = 0 #coefficient increment, goes to 22
-    for market_carrier_combo in [(row['UNIQUE_CARRIER'],row['BI_MARKET']) for row in t100ranked.to_dict('records') if row['UNIQUE_CARRIER'] in ['AS','UA','US','WN']]:
-        for sign,market_mod in enumerate([-300,300]):            
-            #read from base file, write to new outfile
-            with open('carrier_data_mktDiv.txt','r') as basefile, open('matlab_2stagegames/carrier_data_mktmod_MktDiv%s_%s_%s.txt' % (market_carrier_combo[0],market_carrier_combo[1],sign),'w') as outfile:
-                file_ind+=1 #increment file index
-                if file_ind % 50 == 0 :
-                    print("FILE %s" % file_ind)
-                for i,line in enumerate(basefile):
-                    if i<4: #first three lines just copy
-                        outfile.write(line)
-                    else: #make files
-                        splitline = line.strip().split()
-                        #for carrier in carriers_sorted: NO
-                        carrier=carriers_sorted[i-4]                        
-                        carrier_group = coef_df[coef_df['carrier']==carrier]
-                        #full new coefficient vector
-                        new_coefs = [] 
-                        #modify coefficients
-                        for coef_row in carrier_group.to_dict('records'):
-                            #if category being modified, modify coefficients relevant to coef  number
-                            if coef_ind in coef_cats[coef_row['category']] and  carrier in carriers_to_modify:
-                                coef_record = t100ranked_gb.get_group((coef_row['bimarket'],coef_row['carrier']))
-                                Cold = 10000
-                                Cnew = float(coef_record['FLIGHT_COST'])
-                                #old and new market sizes
-                                Mold = 1000                                
-                                Mnew = float(coef_record['MARKET_TOT'])
+    with open('mkt_mod_fns.txt','w') as fn_file:
+        for market_carrier_combo in [(row['UNIQUE_CARRIER'],row['BI_MARKET']) for row in t100ranked.to_dict('records') if row['UNIQUE_CARRIER'] in ['AS','UA','US','WN']]:
+            for sign,market_mod in enumerate([-500,500]):   
+                fn_file.write('carrier_data_mktmod_MktDiv_500_%s_%s_%s.txt\n' % (market_carrier_combo[0],market_carrier_combo[1],sign))
+                #read from base file, write to new outfile
+                with open('carrier_data_mktDiv.txt','r') as basefile, open('matlab_2stagegames/carrier_data_mktmod_MktDiv_500_%s_%s_%s.txt' % (market_carrier_combo[0],market_carrier_combo[1],sign),'w') as outfile:
+                    file_ind+=1 #increment file index
+                    if file_ind % 50 == 0 :
+                        print("FILE %s" % file_ind)
+                    for i,line in enumerate(basefile):
+                        if i<4: #first three lines just copy
+                            outfile.write(line)
+                        else: #make files
+                            splitline = line.strip().split()
+                            #for carrier in carriers_sorted: NO
+                            carrier=carriers_sorted[i-4]                        
+                            carrier_group = coef_df[coef_df['carrier']==carrier]
+                            #full new coefficient vector
+                            new_coefs = [] 
+                            #modify coefficients
+                            for coef_row in carrier_group.to_dict('records'):
+                                #if category being modified, modify coefficients relevant to coef  number
                                 if coef_row['bimarket']==market_carrier_combo[1] and coef_row['carrier']==market_carrier_combo[0]:
-                                    Mnew
-                                #frequency index of carrier in market to determine order of coefficients
-                                freq_ind = int(coef_record['MARKET_RANK'])
-                                if coef_row['competitors']==1:                                            
-                                    base = [-95164.0447,-36238.3083,1148.0305]
-                                    if coef_ind==21:
-                                        base[1] += base[1]*modification_factor
-                                    elif coef_ind==22:
-                                        base[2] += base[2]*modification_factor
+                                    coef_record = t100ranked_gb.get_group((coef_row['bimarket'],coef_row['carrier']))
+                                    Cold = 10000
+                                    Cnew = float(coef_record['FLIGHT_COST'])
+                                    #old and new market sizes
+                                    Mold = 1000                                
+                                    Mnew = float(coef_record['MARKET_TOT'])                                
+                                    Mnew += market_mod
+                                    #frequency index of carrier in market to determine order of coefficients
+                                    freq_ind = int(coef_record['MARKET_RANK'])
+                                    if coef_row['competitors']==1:                                            
+                                        base = [-95164.0447,-36238.3083,1148.0305]                                    
+                                        transcoef = [-(Mnew/Mold)*base[0],(Mnew/Mold)*(Cold-base[1])-Cnew,-(Mnew/Mold)*base[2] ]
+                                        
+                                    elif coef_row['competitors']==2:                                            
+                                        base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]                                    
+                                        transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(Mnew/Mold)*base[3] if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+                                        
+                                    elif coef_row['competitors']==3:
+                                        base=[-150395.5496,-10106.6470,13135.9798,13136.1506,264.4822,-376.1793,-376.1781,270.2080,270.1927,-260.0113]
+                                        
+                                        transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,4)] + [-(Mnew/Mold)*base[4] if i==freq_ind else -(Mnew/Mold)*base[5] for i in range(1,4)]
+                                        if freq_ind ==1:
+                                            transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9]]                                                
+                                        elif freq_ind == 2:
+                                            transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7]]                                                
+                                        elif freq_ind == 3:
+                                            transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7]]
+                                        else:
+                                            return 'freq ind error'                             
+                                       
                                     else:
-                                        return '1 competitor error',freq_ind,coef_ind,coef_cats[coef_row['category']],coef_row
-                                    transcoef = [-(Mnew/Mold)*base[0],(Mnew/Mold)*(Cold-base[1])-Cnew,-(Mnew/Mold)*base[2] ]
-                                    
-                                elif coef_row['competitors']==2:                                            
-                                    base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]
-                                    if coef_ind in [9,15]:
-                                        base[1] += base[1]*modification_factor
-                                    elif coef_ind in [11,17]:
-                                        base[3] += base[3]*modification_factor
-                                    elif coef_ind in [13,19]:
-                                        base[5] += base[5]*modification_factor
-                                    else:
-                                        return '2 competitor error'
-                                    transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(Mnew/Mold)*base[3] if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
-                                    
-                                elif coef_row['competitors']==3:
-                                    base=[-150395.5496,-10106.6470,13135.9798,13136.1506,264.4822,-376.1793,-376.1781,270.2080,270.1927,-260.0113]
-                                    if coef_ind==2:
-                                        base[1] += base[1]*modification_factor
-                                    elif coef_ind ==4:
-                                        base[4] += base[4]*modification_factor
-                                    elif coef_ind==6:
-                                        base[7] += base[7]*modification_factor
-                                        base[8] += base[8]*modification_factor
-                                   
-                                    else:
-                                        return '3 competitor error'
-                                    transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,4)] + [-(Mnew/Mold)*base[4] if i==freq_ind else -(Mnew/Mold)*base[5] for i in range(1,4)]
-                                    if freq_ind ==1:
-                                        transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9]]                                                
-                                    elif freq_ind == 2:
-                                        transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7]]                                                
-                                    elif freq_ind == 3:
-                                        transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7]]
-                                    else:
-                                        return 'freq ind error'          
-                                    
+                                        return('MORE THAN THREE CARRIERS, MASSIVE ERROR')
+                                    mod_coefs=transcoef
+                                else:# keep the same if not the current category being modified
+                                    mod_coefs =  ast.literal_eval(coef_row['coefs'])
+                                if file_ind == 100:
+                                    print(carrier)
+                                    print('mf: %s, coef num: %s, category: %s, row_cat: %s, ind: %s, c: %s, M %s,' % (market_mod,50000,777,coef_row['category'],coef_ind,Cnew, Mnew))
+                                  
+                                    print(coef_row['coefs'])
+                                    print(mod_coefs)
                                
-                                   
-                                else:
-                                    return('MORE THAN THREE CARRIERS, MASSIVE ERROR')
-                                mod_coefs=transcoef
-                            else:# keep the same if not the current category being modified
-                                mod_coefs =  ast.literal_eval(coef_row['coefs'])
-                            if file_ind == 100:
-                                print(carrier)
-                                print('mf: %s, coef num: %s, category: %s, row_cat: %s, ind: %s, c: %s, M %s,' % (modification_factor,50000,777,coef_row['category'],coef_ind,Cnew, Mnew))
-                              
-                                print(coef_row['coefs'])
-                                print(mod_coefs)
-                           
-                            #add potentially modified coefficients to new vector
-                            new_coefs += mod_coefs
-                        splitline[-1] = "["+",".join([str(num) for num in new_coefs])+"]"
-                        newline = "\t".join(splitline) + "\n"
-                        outfile.write(newline)
+                                #add potentially modified coefficients to new vector
+                                new_coefs += mod_coefs
+                            splitline[-1] = "["+",".join([str(num) for num in new_coefs])+"]"
+                            newline = "\t".join(splitline) + "\n"
+                            outfile.write(newline)
     return "done" 
 
 
@@ -1634,9 +1610,15 @@ def get_market_connection_modifiers():
 
 def test_marketsize_2player():
     test_carrier = 'WN'
-    markets=['LAS_PHX','LAS_SAN','LAS_SJC','ONT_PHX']
-    interaction_modifs=[0+i*.1 for i in range(0,11)]
-    quadratic_modifs = [-1+i*.1 for i in range(0,11)]
+    #2 PLAYER MARKETS FOR WN
+    markets=['LAS_PHX','LAS_SAN','LAS_SJC','LAS_SMF','OAK_PHX','OAK_SEA','ONT_PHX','PHX_SAN','PHX_SMF','SEA_SJC','SEA_SMF']
+    #3 PLAYER MARKETS FOR WN
+    #markets=['LAS_LAX','LAS_PDX','LAS_SEA','LAS_SFO','PDX_PHX','PHX_SEA','SAN_SFO']
+    interaction_modifs=[0]##[0+i*.1 for i in range(0,16)]
+    quadratic_modifs = [0]##[-1.5+i*.1 for i in range(0,16)]
+    r_modifs= [1]##[0+i*.1 for i in range(0,11)];   
+    markets_to_modify = [i for i, mk in enumerate(markets)]
+    market_modifs = [-700+i*100 for i in range(0,16)]##[0] #when changed, make sure to modify file output name and output labels appropriately
     market_table_fn= "nonstop_competitive_markets.csv"
     t100ranked = pd.read_csv(market_table_fn)   
     t100ranked_mktgb=t100ranked.groupby('BI_MARKET')
@@ -1667,6 +1649,7 @@ def test_marketsize_2player():
     ]
     
     for i,market_ind in enumerate(markets):
+        print(market_ind)
         #get current market
         current_market = t100ranked_mktgb.get_group(market_ind)     
         player_of_interest =current_market[current_market['UNIQUE_CARRIER']==test_carrier]
@@ -1677,35 +1660,92 @@ def test_marketsize_2player():
         Cold=10000;
         Mold = 1000;
         rows=[]    
-        with open('term_mods.txt','w') as outfile:
-        
-            for modif_interaction in interaction_modifs:       
-                for modif_quad in quadratic_modifs:
-                    for r in [0+i*.1 for i in range(0,11)]:
-                        outfile.write(','.join([str(modif_interaction), str(modif_quad), str(r)]) + '\n') 
-                        if numplayers==2:
-                            base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]    
-                            base[5] -= base[3]*modif_quad     
-                            base[5] -= base[5]*modif_interaction                    
-                            Cnew = player_of_interest['FLIGHT_COST']
-                            Mnew = player_of_interest['MARKET_TOT']
-                            freq_ind = int(player_of_interest['MARKET_RANK'])
-                            
-                            print((r*Mnew + (1-r)))
-                            transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(1/Mold)*base[3]*(r*Mnew + (1-r)) if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
-                            transcoef = [float(tf) for tf in transcoef]                
-                            #get constraints for player of interest                
-                            F = float(player_of_interest['DAILY_FREQ']*player_of_interest['BACKFOURTH']/18 )
-                            bf = float(player_of_interest['BACKFOURTH'])
-                            #row is:  other player frequency, mmarket rank of carrier of interest,contstraint data for market (F and flight time data), number of players in market, and matlab vector of empirical frequencies in order of market rank
-                            row= [float(other_players['DAILY_FREQ']),freq_ind,F,bf] + transcoef + [numplayers,float(player_of_interest['DAILY_FREQ'])]  #list of emp. freqs: '['+' '.join(current_market['DAILY_FREQ'].apply(str).tolist())+']'
-                            rows.append(row)
-                        elif numplayers ==3:
-                            raise Exception('3 player not implemented yet!')
+        with open('matlab_2stagegames/term_mods_Mpert.txt','w') as outfile:  
+            for market_number in markets_to_modify:
+                for market_mod in market_modifs:
+                    for modif_interaction in interaction_modifs:       
+                        for modif_quad in quadratic_modifs:
+                            for r in r_modifs:                            
+                                if numplayers==2:
+                                    base = [-274960.0,-16470.0,	34936.0,	425.6,	-1300.0,	595.7]    
+                                    base[3] -= base[3]*modif_quad     
+                                    base[5] -= base[5]*modif_interaction                    
+                                    Cnew = player_of_interest['FLIGHT_COST']
+                                    
+                                    Mnew = max(float(player_of_interest['MARKET_TOT']) + market_mod,0) if i==market_number else float(player_of_interest['MARKET_TOT'])
+                                    
+                                    freq_ind = int(player_of_interest['MARKET_RANK'])
+                                    
+                                    #print((r*Mnew + (1-r)))
+                                    transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,3)] + [-(1/Mold)*base[3]*(r*Mnew + (1-r)) if i==freq_ind else -(Mnew/Mold)*base[4] for i in range(1,3)] + [-(Mnew/Mold)*base[5]]
+                                    transcoef = [float(tf) for tf in transcoef]                
+                                    #get constraints for player of interest                
+                                    F = float(player_of_interest['DAILY_FREQ']*player_of_interest['BACKFOURTH']/18 )
+                                    bf = float(player_of_interest['BACKFOURTH'])
+                                    #row is:  other player frequency, mmarket rank of carrier of interest,contstraint data for market (F and flight time data), number of players in market, and matlab vector of empirical frequencies in order of market rank
+                                    row= [float(other_players['DAILY_FREQ']),freq_ind,F,bf] + transcoef + [numplayers,float(player_of_interest['DAILY_FREQ'])]  #list of emp. freqs: '['+' '.join(current_market['DAILY_FREQ'].apply(str).tolist())+']'
+                                    rows.append(row)
+                                    
+                                elif numplayers ==3:         #HOW ARE OTHER FREQS PASSED THROUGH
+                                    #     intercept       f                 f'     f''       f^2                          f*f'   f*f''
+                                    base=[-150395.5496,-10106.6470,13135.9798,13136.1506,264.4822,-376.1793,-376.1781,270.2080,270.1927,-260.0113]
+                                    base[4] -= base[4]*modif_quad   
+                                    base[7] -= base[7]*modif_interaction  
+                                    base[8] -= base[8]*modif_interaction  
+                                    Cnew = player_of_interest['FLIGHT_COST']
+                                    
+                                    Mnew = max(float(player_of_interest['MARKET_TOT']) + market_mod,0) if i==market_number else float(player_of_interest['MARKET_TOT'])
+                                    
+                                    freq_ind = int(player_of_interest['MARKET_RANK'])
+                                    
+                                    transcoef = [-(Mnew/Mold)*base[0]] + [(Mnew/Mold)*(Cold-base[1])-Cnew if i==freq_ind else -(Mnew/Mold)*base[2] for i in range(1,4)] + [-(Mnew/Mold)*base[4] if i==freq_ind else -(Mnew/Mold)*base[5] for i in range(1,4)]
+                                    if freq_ind ==1:
+                                        transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9]]                                                
+                                    elif freq_ind == 2:
+                                        transcoef += [-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7]]                                                
+                                    elif freq_ind == 3:
+                                        transcoef += [-(Mnew/Mold)*base[9],-(Mnew/Mold)*base[7],-(Mnew/Mold)*base[7]]
+                                    else:
+                                        print('freq ind error')         
+                                    transcoef = [float(tf) for tf in transcoef] 
+                                    #get constraints for player of interest                
+                                    F = float(player_of_interest['DAILY_FREQ']*player_of_interest['BACKFOURTH']/18 )
+                                    bf = float(player_of_interest['BACKFOURTH'])
+                                    #row is:  other player frequency, mmarket rank of carrier of interest,contstraint data for market (F and flight time data), number of players in market, and matlab vector of empirical frequencies in order of market rank
+                                    row= other_players['DAILY_FREQ'].tolist() + [freq_ind,F,bf] + transcoef + [numplayers,float(player_of_interest['DAILY_FREQ'])]  #list of emp. freqs: '['+' '.join(current_market['DAILY_FREQ'].apply(str).tolist())+']'
+                                    rows.append(row)
+                                if len(market_modifs) ==1:
+                                    outfile.write(','.join([str(modif_interaction), str(modif_quad), str(r)]) + '\n') 
+                                else: 
+                                    outfile.write(','.join([str(Mnew), str(market_mod),str(market_number), str(r)]) + '\n')
+                                
         df_out=pd.DataFrame(rows)
-        df_out.to_csv('matlab_2stagegames/r_mod_%s.csv' % market_ind)
+        df_out.to_csv('matlab_2stagegames/r_mod_Mpert_%s.csv' % market_ind)
         
     return 'done'
+    
+    
+def analyze_marketmod():
+    market_table_fn= "nonstop_competitive_markets.csv"
+    t100ranked = pd.read_csv(market_table_fn) 
+    t100ranked['ind'] = t100ranked.index
+    rows = []
+    for market_carrier_combo in [[row['UNIQUE_CARRIER'],row['BI_MARKET'],row] for row in t100ranked.to_dict('records') if row['UNIQUE_CARRIER'] in ['AS','UA','US','WN']]:
+         row=market_carrier_combo[2]
+         index = int(row['ind'])
+         low_fn='matlab_2stagegames/exp_results_mktmod_MktDiv%s_%s_%s.txt' % (market_carrier_combo[0],market_carrier_combo[1],0)
+         low_df = pd.read_csv(low_fn)
+         low_freq=float(low_df.iloc[index,2])
+         high_fn='matlab_2stagegames/exp_results_mktmod_MktDiv%s_%s_%s.txt' % (market_carrier_combo[0],market_carrier_combo[1],1)
+         high_df = pd.read_csv(high_fn)
+         high_freq=float(high_df.iloc[index,2])
+         increase = 1 if high_freq > low_freq else 0
+         rows.append({'UNIQUE_CARRIER':row['UNIQUE_CARRIER'],'BI_MARKET':row['BI_MARKET'],'lowmkt':low_freq,'highmkt':high_freq,'increase':increase})
+    mkt_df=pd.DataFrame(rows)
+    mkt_df['diff']=mkt_df['highmkt']-mkt_df['lowmkt']
+    mkt_div_results_unmod = pd.read_csv('net_results_basemod_WNmod_MktDiv13_0.0.txt')
+    mkt_merge_table = pd.merge(mkt_df,mkt_div_results_unmod,on=['UNIQUE_CARRIER','BI_MARKET'])
+    mkt_merge_table.to_csv('mkt_perturbation300_equilibrium_mktDiv.csv')
 
 
 
